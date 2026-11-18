@@ -541,13 +541,14 @@
   function contactCard(item) {
     const who = item.type === "LOST" ? "owner" : "finder";
     const email = String(item.contact_email);
-    const mailto = `mailto:${encodeURIComponent(email).replace(/%40/g, "@")}?subject=${encodeURIComponent(`FoundIt: ${item.name}`)}`;
+    // Opens Gmail's compose window (the browser's default mail app may be Outlook).
+    const mailto = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(`FoundIt: ${item.name}`)}`;
     return `
       <div class="card fi-contact">
         <h3>${icon("contact")} Contact the ${who}</h3>
         <p class="fi-meta">${icon("mail")} ${escapeHTML(email)}</p>
         ${item.contact_info ? `<p class="fi-meta">${icon("info")} ${escapeHTML(item.contact_info)}</p>` : ""}
-        <a class="btn" href="${escapeHTML(mailto)}">${icon("send")} Email the ${who}</a>
+        <a class="btn" href="${escapeHTML(mailto)}" target="_blank" rel="noopener noreferrer">${icon("send")} Email the ${who} in Gmail</a>
       </div>`;
   }
 
