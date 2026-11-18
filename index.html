@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-building="interweave">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b2e4a">
+  <meta name="description" content="GlitchWayve — CIIT student dashboard for Interweave and Glitch Tower">
+  <title>GlitchWayve | CIIT Student Dashboard</title>
+
+  <!-- Fonts and icons load from CDNs. The app itself is plain HTML, CSS and JavaScript. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
+
+  <!-- Shown until Supabase confirms a signed-in user. -->
+  <section id="loginScreen" class="login-screen" aria-labelledby="loginTitle"></section>
+
+  <!-- Dashboard shell: revealed after sign-in. -->
+  <div id="dashboard" class="dashboard" hidden>
+    <aside id="sidebar" class="sidebar" aria-label="Main navigation"></aside>
+    <div class="dashboard-column">
+      <header id="topbar" class="topbar"></header>
+      <div id="offlineBanner" class="offline-banner" role="status" hidden>
+        <i data-lucide="wifi-off"></i>
+        <span>You're offline. You can still read what's on screen. We'll reload when you're back online.</span>
+      </div>
+      <main id="mainContent" class="main-content" tabindex="-1"></main>
+      <footer class="site-footer">
+        <span>GlitchWayve · CIIT Student Dashboard prototype</span>
+        <span>Items marked <strong>Sample details</strong> are not yet verified with CIIT.</span>
+      </footer>
+    </div>
+  </div>
+
+  <!--
+    CHATBOT SLOT (developed by another group member).
+    Mount the FAQ chatbot inside #chatbotRoot. GlitchWayve calls
+    window.GlitchWayveChatbot.open() when the "Ask GlitchWayve" button is clicked,
+    if that object exists. See README.md → "Chatbot integration".
+  -->
+  <div id="chatbotRoot" class="chatbot-root" hidden></div>
+
+  <div id="dialogRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
