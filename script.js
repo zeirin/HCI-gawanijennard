@@ -48,10 +48,14 @@ const NAV_GROUPS = [
   { label: "Find", items: [
     { section: "home", label: "Home", icon: "house" },
     { section: "finder", label: "Find a Service", icon: "search" },
+    { section: "manual", label: "User Manual", icon: "book-marked" },
     { section: "moving", label: "Moving Around", icon: "map" },
     { section: "directory", label: "Help & Contact", icon: "contact" }
   ] },
-  { label: "Services", items: CATEGORIES.map((c) => ({ section: c.section, label: c.category, icon: c.icon })) },
+  { label: "Services", items: [
+    { section: "foundit", label: "FoundIt", icon: "package-search" },
+    ...CATEGORIES.map((c) => ({ section: c.section, label: c.category, icon: c.icon }))
+  ] },
   { label: "My activity", items: [
     { section: "pulse", label: "PULSE", icon: "activity", badge: "Simulation" },
     { section: "myrequests", label: "My Requests", icon: "clipboard-list" },
@@ -59,7 +63,6 @@ const NAV_GROUPS = [
   ] },
   { label: "More", items: [
     { section: "handbook", label: "College Handbook", icon: "book-open" },
-    { section: "manual", label: "User Manual", icon: "book-marked" },
     { section: "settings", label: "Settings", icon: "settings" },
     { section: "staff", label: "Admin Panel", icon: "shield-check", staffOnly: true }
   ] }
@@ -368,6 +371,7 @@ async function signIn(form) {
   await openDashboard();
 }
 async function signOut() {
+  await window.FoundIt?.signOut().catch(() => {});
   await supabaseClient.auth.signOut();
   state.user = null; state.profile = null; state.data.loaded = false;
   if (tour.active) endTour(false);
@@ -485,6 +489,7 @@ async function renderCurrentPage() {
     else if (state.section === "handbook") await renderHandbookPage();
     else if (state.section === "settings") renderSettingsPage();
     else if (state.section === "staff") await renderStaffPage();
+    else if (state.section === "foundit") await window.FoundIt.render();
   } catch (error) {
     showPageError(error);
     return;
