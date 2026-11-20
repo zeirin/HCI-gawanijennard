@@ -19,6 +19,8 @@
       answer: "GlitchWayve is the CIIT student dashboard for the Interweave and Glitch Tower buildings. Use it to find services, see where offices are, track your requests and report lost items.", section: "home" },
     { q: "How do I switch buildings?", keywords: ["switch", "building", "interweave", "glitch", "tower", "campus"],
       answer: "Use the building switch at the top of the page to change between Interweave and Glitch Tower. Services, rooms and announcements change to match the building you pick." },
+    { q: "Which floors does the Glitch Tower elevator stop at?", keywords: ["elevator", "lift", "stairs", "floor", "floors", "glitch", "tower"],
+      answer: "The Glitch Tower elevator stops at LG, 5F, and 7F to 9F. Use the stairs for the other floors. 2F, 3F, 10F and 11F are off limits to students.", section: "moving" },
     { q: "I lost something. What do I do?", keywords: ["lost", "found", "foundit", "missing", "item", "wallet", "id", "bag", "phone", "left"],
       answer: "Open FoundIt under Services. Browse the found items, or press Report an item to post what you lost. FoundIt uses its own account, the same one as the FoundIt mobile app.", section: "foundit" },
     { q: "I forgot my FoundIt password.", keywords: ["forgot", "password", "reset", "foundit", "change"],
@@ -33,9 +35,9 @@
       answer: "Open the profile menu at the top right and press Sign out. Always sign out on a shared computer." }
   ];
 
-  // Words that mean the same thing, so "TOR" finds "transcript" and so on.
+  // Words that mean the same thing, so "TOR" finds "transcript" and so on. Use a list for several words.
   const SYNONYMS = {
-    tor: "transcript", grades: "grade", cor: "registration", enroll: "enrollment", enrolment: "enrollment",
+    tor: ["transcript", "records"], grades: "grade", cor: "registration", enroll: "enrollment", enrolment: "enrollment",
     clinic: "health", nurse: "health", doctor: "health", sick: "health", counselor: "guidance", counseling: "guidance",
     wifi: "it", internet: "it", laptop: "it", computer: "it", lost: "found", where: "location", room: "location",
     borrow: "equipment", forge: "equipment", ojt: "practicum", internship: "practicum", job: "careers", pass: "password"
@@ -48,7 +50,7 @@
   function words(text) {
     return String(text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
       .filter((w) => w && !STOP.has(w))
-      .flatMap((w) => SYNONYMS[w] ? [w, SYNONYMS[w]] : [w]);
+      .flatMap((w) => [w, ...[].concat(SYNONYMS[w] || [])]);
   }
   /** Score one candidate: words in its title count more than words in its body. */
   function score(qWords, title, body) {
@@ -57,7 +59,7 @@
     for (const w of qWords) {
       if (t.includes(w)) s += 3;
       else if (w.length > 3 && t.some((x) => x.startsWith(w) || w.startsWith(x))) s += 2;
-      else if (b.includes(w)) s += 1;
+      else if (b.some((x) => x === w || (w.length > 3 && x.startsWith(w)))) s += 1; // "transcript" also matches "transcripts"
     }
     return s;
   }
@@ -99,18 +101,21 @@
     }
     if (c.kind === "service") {
       const s = c.item;
-      const other = s.building_key && bot.ctx.building && s.building_key !== bot.ctx.building
-        ? `<p class="cb-note">${icon("building")} This one is at ${e(typeof buildingName === "function" ? buildingName(s.building_key) : s.building_key)}.</p>` : "";
+      // Every building's copy of this service, current building first.
+      const copies = (bot.ctx.services || []).filter((x) => s.service_code ? x.service_code === s.service_code : x.name === s.name)
+        .sort((a, b) => (b.building_key === bot.ctx.building) - (a.building_key === bot.ctx.building));
+      const bName = (k) => typeof buildingName === "function" ? buildingName(k) : k;
       return `
         <p><strong>${e(s.name)}</strong>${s.category ? ` · ${e(s.category)}` : ""}</p>
         ${s.description ? `<p>${e(s.description)}</p>` : ""}
-        ${other}
-        <ul class="cb-facts">
-          ${where(s) ? `<li>${icon("map-pin")} ${e(where(s))}</li>` : ""}
-          ${s.hours ? `<li>${icon("clock")} ${e(s.hours)}</li>` : ""}
-          ${s.processing_time ? `<li>${icon("timer")} ${e(s.processing_time)}</li>` : ""}
-        </ul>
-        <button class="btn btn-sm btn-primary" type="button" data-action="open-service" data-id="${e(s.id)}">${icon("arrow-right")} See full details</button>`;
+        ${(copies.length ? copies : [s]).map((x) => `
+          <p class="cb-building">${icon("building-2")} ${e(bName(x.building_key))}</p>
+          <ul class="cb-facts">
+            ${[x.floor_label, x.room_number, x.area_name].some(Boolean) ? `<li>${icon("map-pin")} ${e([x.floor_label, x.room_number, x.area_name].filter(Boolean).join(" · "))}</li>` : ""}
+            ${x.hours ? `<li>${icon("clock")} ${e(x.hours)}</li>` : ""}
+          </ul>`).join("")}
+        ${s.processing_time ? `<ul class="cb-facts"><li>${icon("timer")} ${e(s.processing_time)}</li></ul>` : ""}
+        <button class="btn btn-sm btn-primary" type="button" data-action="open-service" data-id="${e((copies[0] || s).id)}">${icon("arrow-right")} See full details</button>`;
     }
     if (c.kind === "office") {
       const o = c.item;
@@ -121,10 +126,23 @@
           ${o.hours ? `<li>${icon("clock")} ${e(o.hours)}</li>` : ""}
           ${o.email ? `<li>${icon("mail")} <a href="mailto:${e(o.email)}">${e(o.email)}</a></li>` : ""}
         </ul>
+        ${otherBuildings(o)}
         ${pageBtn("directory", "Open Help & Contact")}`;
     }
     const m = c.item;
     return `<p><strong>${e(m.title)}</strong></p><ol class="cb-steps">${m.steps.map((s) => `<li>${e(s)}</li>`).join("")}</ol>${pageBtn(m.section)}`;
+  }
+  /** Offices exist in one building, but their services may run in the other one too: list those places. */
+  function otherBuildings(o) {
+    const places = new Map();
+    for (const s of bot.ctx.services || []) {
+      if (s.office_key !== o.office_key || s.building_key === o.building_key) continue;
+      const spot = [s.floor_label, s.room_number].filter(Boolean).join(" · ");
+      if (spot) places.set(`${s.building_key}|${spot}`, [s.building_key, spot]);
+    }
+    const bName = (k) => typeof buildingName === "function" ? buildingName(k) : k;
+    return [...places.values()].map(([b, spot]) =>
+      `<p class="cb-building">${icon("building-2")} Also in ${escapeHTML(bName(b))}</p><ul class="cb-facts"><li>${icon("map-pin")} ${escapeHTML(spot)}</li></ul>`).join("");
   }
   function pageBtn(section, label = "Open page") {
     return `<button class="btn btn-sm" type="button" data-section="${escapeHTML(section)}">${icon("arrow-right")} ${escapeHTML(label)}</button>`;
