@@ -708,12 +708,10 @@ function renderCategoryPage(cat) {
 
 async function renderMovingPage() {
   const { floors, rooms } = await getFloorsAndRooms();
-  const noFloor = rooms.filter((r) => !r.floor_id);
-  const floorList = [...floors];
-  if (noFloor.length) floorList.push({ id: "none", floor_label: "Floor not confirmed", is_hypothetical: true });
+  const floorList = [...floors]; // rooms with no floor set are not listed
   if (!state.floorId || !floorList.some((f) => f.id === state.floorId)) state.floorId = floorList[0]?.id || null;
   const floor = floorList.find((f) => f.id === state.floorId);
-  const floorRooms = floor ? (floor.id === "none" ? noFloor : rooms.filter((r) => r.floor_id === floor.id)) : [];
+  const floorRooms = floor ? rooms.filter((r) => r.floor_id === floor.id) : [];
   const servicesOnFloor = floor ? servicesIn().filter((s) => s.floor_label && floor.floor_label && s.floor_label.includes(floor.floor_label) && s.service_type !== "Online") : [];
 
   document.getElementById("mainContent").innerHTML = `

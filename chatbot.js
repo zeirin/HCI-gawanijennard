@@ -64,7 +64,7 @@
     { q: "How do I book a room?", keywords: ["book", "booking", "reserve", "reservation", "room", "space", "classroom", "meeting", "studio", "cubicle"],
       answer: "Open Book a Space, then choose the room, date, start and end time, and purpose. Rooms can be booked from 7:00 AM to 9:00 PM for up to 3 hours. GlitchWayve checks for conflicts, then Facilities approves or declines it.", section: "academics" },
     { q: "Which rooms can I book?", keywords: ["which", "rooms", "bookable", "available", "book", "reserve", "list"],
-      answer: "Interweave: Studio Room 301, Mac Lab 302, Lecture Rooms 401 and 402, LRC Cubicles, Meeting Rooms 1 to 3 and the Recording Room. Glitch Tower: Lecture Rooms 601, 603, 604, 704, 804, 901 and 902. Bring your student ID and book at least 1 day ahead.", section: "moving" },
+      answer: "Interweave: Studio Room 301, Mac Lab 302, Lecture Rooms 401 and 402, LRC Cubicles and Meeting Rooms 1 to 3. Glitch Tower: Lecture Rooms 601, 603, 604, 704, 804, 901 and 902. Bring your student ID and book at least 1 day ahead.", section: "moving" },
     { q: "How do I borrow equipment?", keywords: ["borrow", "equipment", "forge", "camera", "device", "tools", "rent", "loan"],
       answer: "Open the Innovation Hub to browse equipment from The Forge. Each card shows how many are available. Press Borrow, choose the quantity, pickup and return dates and the purpose, then submit. Wait for approval before pickup.", section: "innovation" },
     { q: "How do I submit a project to the Innovation Hub?", keywords: ["project", "idea", "submit", "innovation", "hub", "startup", "capstone", "work"],
