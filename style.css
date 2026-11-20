@@ -318,6 +318,8 @@ html[data-building="glitch"] .neon-4 .service-icon { color: var(--neon-blue); }
 /* States */
 .empty-state, .error-state { text-align: center; padding: 36px 20px; border-radius: var(--radius); border: 1px dashed var(--border); background: var(--surface); }
 .empty-state svg.lucide, .error-state svg.lucide { width: 34px; height: 34px; color: var(--muted); }
+/* Icons inside buttons keep the button's own text colour and normal size (e.g. FoundIt "Report an item"). */
+.empty-state .btn svg.lucide { width: 1.15em; height: 1.15em; color: currentColor; }
 .error-state { border: 2px solid var(--err-border); background: var(--err-bg); color: var(--err-text); text-align: left; }
 .error-state .error-label { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: .8rem; }
 .error-state svg.lucide { width: 18px; height: 18px; color: inherit; }
