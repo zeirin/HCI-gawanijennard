@@ -118,6 +118,7 @@
     tor: ["transcript", "records"], grades: "grade", cor: "registration", enroll: "enrollment", enrolment: "enrollment",
     clinic: "health", nurse: "health", doctor: "health", sick: "health", counselor: "guidance", counseling: "guidance",
     wifi: "it", internet: "it", laptop: "it", computer: "it", where: "location", room: "location",
+    canteen: "cafeteria", cafeteria: "canteen", cafe: ["cafeteria", "canteen"], library: "lrc", lrc: "library",
     borrow: "equipment", forge: "equipment", ojt: "practicum", internship: "practicum", job: "careers", pass: "password"
   };
   const STOP = new Set("a an and are at be can do does for from how i in is me my of on or the to what when where which who why with you your please pls po ba ko ang ng sa".split(" "));
@@ -143,15 +144,12 @@
   }
 
   function candidates() {
-    const { services = [], offices = [], building } = bot.ctx || {};
+    const { services = [], offices = [] } = bot.ctx || {};
     const manual = typeof MANUAL !== "undefined" ? MANUAL.filter((m) => !m.staffOnly) : [];
     return [
       ...FAQ.map((f) => ({ kind: "faq", title: f.q, body: f.keywords.join(" ") + " " + f.answer, item: f })),
-      // Prefer the current building's copy of a service, but keep the other one findable.
-      ...services.map((s) => ({ kind: "service", title: s.name, body: [s.category, s.description, s.office_key, s.area_name].join(" "), item: s,
-        bonus: s.building_key === building ? 0.5 : 0 })),
-      ...offices.map((o) => ({ kind: "office", title: o.name, body: [o.office_key, "office contact email hours location"].join(" "), item: o,
-        bonus: o.building_key === building ? 0.5 : 0 })),
+      ...services.map((s) => ({ kind: "service", title: s.name, body: [s.category, s.description, s.office_key, s.area_name].join(" "), item: s })),
+      ...offices.map((o) => ({ kind: "office", title: o.name, body: [o.office_key, "office contact email hours location"].join(" "), item: o })),
       ...manual.map((m) => ({ kind: "manual", title: m.title, body: m.steps.join(" "), item: m })),
       ...(bot.places?.floors || []).map((f) => ({ kind: "floor", title: `${bName(f.building_key)} ${f.floor_label}`, item: f,
         body: ["floor", f.area_name, f.is_off_limits ? "off limits" : "", ...roomsOn(f).map((r) => r.name)].join(" ") })),
@@ -183,12 +181,25 @@
     const seen = new Set();
     return candidates()
       // A typed room number ("703") points straight at that room.
-      .map((c) => ({ ...c, score: score(q, c.title, c.body) + (c.bonus || 0)
+      .map((c) => ({ ...c, score: score(q, c.title, c.body)
         + (c.kind === "room" && q.includes(String(c.item.room_number).toLowerCase()) ? 4 : 0) }))
       .filter((c) => c.score >= 2)
       .sort((a, b) => b.score - a.score)
-      .filter((c) => { const k = c.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
-      .slice(0, 4);
+      // A service answer already covers both buildings; other places with the same name stay apart per building.
+      .filter((c) => { const k = c.kind === "service" ? `s|${c.title.toLowerCase()}` : `${c.title.toLowerCase()}|${c.item.building_key || ""}`;
+        if (seen.has(k)) return false; seen.add(k); return true; })
+      .slice(0, 12);
+  }
+
+  // ---------- Both buildings in every place answer ----------
+  const PLACES = new Set(["service", "office", "room", "floor"]);
+  const BUILDINGS = ["interweave", "glitch"];
+  /** Buildings an answer already shows: a service lists all its copies, an office adds where its services run. */
+  function buildingsOf(c) {
+    const list = c.item.building_key ? [c.item.building_key] : [];
+    if (c.kind === "service") (bot.ctx.services || []).forEach((x) => { if (x.service_code === c.item.service_code) list.push(x.building_key); });
+    if (c.kind === "office") (bot.ctx.services || []).forEach((x) => { if (x.office_key === c.item.office_key && (x.floor_label || x.room_number)) list.push(x.building_key); });
+    return new Set(list);
   }
 
   // ---------- Answers as HTML ----------
@@ -243,7 +254,7 @@
       return `
         <p><strong>${e(r.name)}</strong>${r.room_type ? ` · ${e(r.room_type)}` : ""}</p>
         <ul class="cb-facts">
-          <li>${icon("map-pin")} ${e([bName(r.building_key), f?.floor_label, r.room_number].filter(Boolean).join(" · "))}</li>
+          <li>${icon("map-pin")} ${e([bName(r.building_key), f?.floor_label, /\d/.test(r.room_number || "") ? r.room_number : ""].filter(Boolean).join(" · "))}</li>
           ${r.hours ? `<li>${icon("clock")} ${e(r.hours)}</li>` : ""}
           ${r.capacity ? `<li>${icon("users")} Up to ${e(r.capacity)} people</li>` : ""}
           ${r.is_bookable ? `<li>${icon("calendar-check")} Bookable through Book a Space${r.requirements ? `. ${e(r.requirements)}` : ""}</li>` : ""}
@@ -277,8 +288,27 @@
         <div class="cb-chips">${suggestionChips()}</div>
         ${pageBtn("directory", "Open Help & Contact")}`;
     }
-    const [best, ...more] = found;
-    return answerHTML(best) + (more.length
+    const best = found[0];
+    const shown = [best];
+    let html = answerHTML(best);
+    if (PLACES.has(best.kind)) {
+      const covered = buildingsOf(best);
+      // Current building first, then the other one; the matches are the same from either tab.
+      const order = [...BUILDINGS].sort((a, b) => (b === bot.ctx.building) - (a === bot.ctx.building));
+      for (const b of order) {
+        if (covered.has(b)) continue;
+        const alt = found.find((c) => PLACES.has(c.kind) && !shown.includes(c) && c.item.building_key === b);
+        if (alt) {
+          html += `<hr class="cb-sep">${answerHTML(alt)}`;
+          shown.push(alt);
+          buildingsOf(alt).forEach((x) => covered.add(x));
+        } else {
+          html += `<p class="cb-note">${icon("info")} Nothing matching was found in ${escapeHTML(bName(b))}.</p>`;
+        }
+      }
+    }
+    const more = found.filter((c) => !shown.includes(c)).slice(0, 3);
+    return html + (more.length
       ? `<p class="cb-related">Related:</p><div class="cb-chips">${more.map((c) => chip(c.title)).join("")}</div>` : "");
   }
   const chip = (text) => `<button class="chip" type="button" data-cb-ask="${escapeHTML(text)}">${escapeHTML(text)}</button>`;

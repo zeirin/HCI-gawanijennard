@@ -414,6 +414,8 @@ html[data-building="glitch"] .cb-head { background: #0e0f12; border-bottom: 2px 
 .cb-facts svg.lucide, .cb-note svg.lucide { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--accent); }
 .cb-note { display: flex; gap: 6px; font-size: .85rem; color: var(--muted); }
 .cb-steps { margin: 6px 0 0; padding-left: 20px; }
+.cb-sep { border: 0; border-top: 1px dashed var(--border); margin: 12px 0; }
+.cb-note { margin-top: 10px !important; }
 .cb-building { display: flex; gap: 6px; align-items: center; margin-top: 10px !important; font-weight: 700; font-size: .85rem; }
 .cb-building svg.lucide { width: 16px; height: 16px; color: var(--accent); }
 .cb-related { margin-top: 10px !important; font-size: .8rem; font-weight: 700; color: var(--muted); }
