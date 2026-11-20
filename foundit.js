@@ -30,6 +30,10 @@
     backTo: "browse",
     query: "", type: null, category: null,
     registering: false,
+    forgot: false,         // showing the "reset password" screen instead of login
+    resetEmail: "",
+    resetSent: false,      // step 2 of the reset (code + new password)
+    resetting: false,      // true while the temporary recovery session exists
     enrollment: null,
     codeAttempts: 0,
     unread: 0,
@@ -45,6 +49,7 @@
     email(v) { v = v.trim(); if (!v) return "Email is required"; if (v.length > 254) return "Email is too long"; return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(v) ? null : "Enter a valid email address"; },
     password(v) { if (!v) return "Password is required"; if (v.length < 8) return "Password must be at least 8 characters"; if (v.length > 72) return "Password is too long"; if (!/[A-Za-z]/.test(v)) return "Password must contain a letter"; if (!/\d/.test(v)) return "Password must contain a number"; return null; },
     otp(v) { return /^\d{6}$/.test(v) ? null : "Enter the 6-digit code from Google Authenticator"; },
+    emailCode(v) { return /^\d{6,8}$/.test(v.trim()) ? null : "Enter the code from the email"; },
     name(v) { v = v.trim(); if (!v) return "Item name is required"; if (v.length < 2) return "Item name is too short"; return v.length > 60 ? "Item name must be at most 60 characters" : null; },
     location(v) { v = v.trim(); if (!v) return "Location is required"; if (v.length < 2) return "Location is too short"; return v.length > 80 ? "Location must be at most 80 characters" : null; },
     description(v) { return v.trim().length > 500 ? "Description must be at most 500 characters" : null; },
@@ -67,6 +72,8 @@
       if (text.includes("weak_password")) return "Password is too weak. Use at least 8 characters with letters and numbers.";
       if (/mfa|totp|code/.test(text)) return "Invalid or expired code. Check Google Authenticator and try again.";
       if (/over_|rate/.test(text) || e?.status === 429) return "Too many attempts. Please wait a minute and try again.";
+      if (text.includes("same_password")) return "Your new password must be different from the old one.";
+      if (/otp|expired/.test(text)) return "Invalid or expired code. Request a new one and try again.";
       return "Authentication failed. Please try again.";
     }
     if (e?.status === 401 || code === "pgrst301" || text.includes("jwt")) return "Your session expired. Please log in again.";
@@ -125,7 +132,7 @@
     });
     fi.client.auth.onAuthStateChange((event, session) => {
       fi.session = session;
-      if (event === "SIGNED_OUT") {
+      if (event === "SIGNED_OUT" && !fi.resetting) {
         stopListening();
         fi.stage = "logged_out"; fi.enrollment = null; fi.unread = 0;
         if (isActive()) draw();
@@ -206,7 +213,7 @@
       `${icon("package-search")} Lost &amp; found`, bell);
 
     let body = "";
-    if (fi.stage === "logged_out") body = authView();
+    if (fi.stage === "logged_out") body = fi.forgot ? forgotView() : authView();
     else if (fi.stage === "needs_enroll") body = enrollView();
     else if (fi.stage === "needs_verify") body = verifyView();
     else {
@@ -276,6 +283,7 @@
           ${r ? `<div class="field"><label for="fiConfirm">Confirm password</label><input id="fiConfirm" name="confirm" type="password" autocomplete="new-password" maxlength="72" required><small class="form-error" id="fiConfirmErr"></small></div>` : ""}
           <p class="form-error" id="fiAuthErr" role="alert"></p>
           <button class="btn btn-primary" type="submit" style="width:100%">${r ? "Create account" : "Log in"}</button>
+          ${r ? "" : '<button class="btn btn-ghost" type="button" data-fi="forgot" style="width:100%;margin-top:8px">Forgot password?</button>'}
         </form>
         <p class="form-help" style="text-align:center">You'll need the Google Authenticator app for two-step verification.</p>
       </div>`;
@@ -311,6 +319,106 @@
     } catch (e) {
       setBusy(form, false);
       setError("fiAuthErr", friendly(e));
+    }
+  }
+
+  // ---------- Forgot password ----------
+  // Step 1: email a recovery code. Step 2: that code + new password + authenticator code.
+  // The temporary recovery session is always signed out afterwards, so the user logs in
+  // again with the new password and a fresh authenticator code (same as the mobile app).
+  function forgotView() {
+    const sent = fi.resetSent;
+    const email = escapeHTML(fi.resetEmail);
+    const step1 = `
+      <form data-fi-form="reset-send" novalidate style="margin-top:16px">
+        <div class="field"><label for="fiResetEmail">School email</label><input id="fiResetEmail" name="email" type="email" autocomplete="email" maxlength="254" value="${email}" required><small class="form-error" id="fiResetEmailErr"></small></div>
+        <p class="form-error" id="fiResetErr" role="alert"></p>
+        <button class="btn btn-primary" type="submit" style="width:100%">Send code</button>
+      </form>`;
+    const step2 = `
+      <form data-fi-form="reset" novalidate style="margin-top:16px">
+        <div class="field"><label for="fiResetCode">Code from email</label><input id="fiResetCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required><small class="form-error" id="fiResetCodeErr"></small></div>
+        <div class="field"><label for="fiNewPassword">New password</label><input id="fiNewPassword" name="password" type="password" autocomplete="new-password" maxlength="72" required>
+          <small>At least 8 characters, with a letter and a number</small><small class="form-error" id="fiNewPasswordErr"></small></div>
+        <div class="field"><label for="fiNewConfirm">Confirm new password</label><input id="fiNewConfirm" name="confirm" type="password" autocomplete="new-password" maxlength="72" required><small class="form-error" id="fiNewConfirmErr"></small></div>
+        <div class="field"><label for="fiResetOtp">Google Authenticator code</label><input id="fiResetOtp" name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" required><small class="form-error" id="fiResetOtpErr"></small></div>
+        <p class="form-error" id="fiResetErr" role="alert"></p>
+        <button class="btn btn-primary" type="submit" style="width:100%">Reset password</button>
+        <button class="btn btn-ghost" type="button" data-fi="reset-resend" style="width:100%;margin-top:8px">Send a new code</button>
+        <button class="btn btn-ghost" type="button" data-fi="reset-change-email" style="width:100%">Use a different email</button>
+      </form>`;
+    return `
+      <div class="card fi-auth">
+        <div class="fi-auth-head">${icon("lock-keyhole")}<div><h2>Reset password</h2>
+          <p class="muted">${sent ? `Enter the code we emailed to ${email}, choose a new password, and enter your authenticator code.` : "Enter your school email and we'll send you a code."}</p></div></div>
+        ${sent ? step2 : step1}
+        <button class="btn btn-ghost" type="button" data-fi="forgot-back" style="width:100%;margin-top:8px">Back to log in</button>
+      </div>`;
+  }
+
+  async function sendResetCode(email, form) {
+    setBusy(form, true);
+    try {
+      const { error } = await client().auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      fi.resetEmail = email; fi.resetSent = true;
+      draw();
+      showToast("If an account exists for that email, a code was sent.");
+    } catch (e) {
+      setBusy(form, false);
+      setError("fiResetErr", friendly(e));
+    }
+  }
+
+  function submitResetSend(form) {
+    const email = form.elements.email.value.trim();
+    const err = V.email(email);
+    setError("fiResetEmailErr", err); setError("fiResetErr", "");
+    if (err) return;
+    return sendResetCode(email, form);
+  }
+
+  async function submitReset(form) {
+    const code = form.elements.code.value.trim();
+    const password = form.elements.password.value;
+    const confirm = form.elements.confirm.value;
+    const otp = form.elements.otp.value.trim();
+    const errs = {
+      fiResetCodeErr: V.emailCode(code),
+      fiNewPasswordErr: V.password(password),
+      fiNewConfirmErr: !confirm ? "Please confirm your password" : confirm !== password ? "Passwords do not match" : null,
+      fiResetOtpErr: V.otp(otp)
+    };
+    Object.entries(errs).forEach(([id, m]) => setError(id, m));
+    setError("fiResetErr", "");
+    if (Object.values(errs).some(Boolean)) return;
+    setBusy(form, true);
+    const sb = client();
+    const endRecovery = () => sb.auth.signOut().catch(() => sb.auth.signOut({ scope: "local" }).catch(() => {}));
+    fi.resetting = true; // keep the SIGNED_IN/SIGNED_OUT of the recovery session from redrawing
+    try {
+      const { error } = await sb.auth.verifyOtp({ email: fi.resetEmail, token: code, type: "recovery" });
+      if (error) throw error;
+      const { data, error: listError } = await sb.auth.mfa.listFactors();
+      if (listError) throw listError;
+      const factor = (data.all || []).find((f) => f.factor_type === "totp" && f.status === "verified");
+      if (factor) {
+        const { error: mfaError } = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code: otp });
+        if (mfaError) throw mfaError;
+      }
+      const { error: updError } = await sb.auth.updateUser({ password });
+      if (updError) throw updError;
+      await endRecovery();
+      fi.resetting = false;
+      Object.assign(fi, { forgot: false, resetSent: false, registering: false, stage: "logged_out", session: null });
+      draw();
+      showToast("Password changed. Log in with your new password.");
+    } catch (e) {
+      await endRecovery();
+      fi.resetting = false;
+      fi.session = null;
+      setBusy(form, false);
+      setError("fiResetErr", friendly(e));
     }
   }
 
@@ -808,6 +916,10 @@
         case "retry": return render();
         case "retry-enroll": fi.enrollment = null; return draw();
         case "auth-mode": fi.registering = t.dataset.mode === "register"; return draw();
+        case "forgot": fi.forgot = true; fi.resetSent = false; fi.resetEmail = document.getElementById("fiEmail")?.value.trim() || ""; return draw();
+        case "forgot-back": fi.forgot = false; fi.resetSent = false; return draw();
+        case "reset-change-email": fi.resetSent = false; return draw();
+        case "reset-resend": setError("fiResetErr", ""); return sendResetCode(fi.resetEmail, t.closest("form"));
         case "logout-now": return logout();
         case "logout": if (await confirmDialog("Log out of FoundIt?", "You'll need your password and an authenticator code to sign in again.", "Log out", true)) return logout(); return;
         case "view": return go(t.dataset.view);
@@ -852,6 +964,8 @@
     const kind = form.dataset.fiForm;
     if (kind === "auth") return submitAuth(form);
     if (kind === "otp") return submitOtp(form);
+    if (kind === "reset-send") return submitResetSend(form);
+    if (kind === "reset") return submitReset(form);
     if (kind === "item") return submitItem(form);
     if (kind === "comment" || kind === "claim") {
       const isClaim = kind === "claim";
