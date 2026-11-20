@@ -419,9 +419,29 @@ function handleRouteChange() {
   state.section = known.includes(section) ? section : "home";
   if (state.section === "staff" && !isStaff()) state.section = "home";
   applyBuildingTheme();
+  setNavOpen(false);
   renderAppShell();
   renderCurrentPage();
 }
+
+// ---------- Phone menu (the sidebar slides in from the left on small screens) ----------
+const phoneQuery = window.matchMedia("(max-width: 640px)");
+function setNavOpen(open, { focus = false } = {}) {
+  open = Boolean(open) && phoneQuery.matches;
+  document.body.classList.toggle("nav-open", open);
+  const toggle = document.querySelector(".menu-toggle");
+  if (toggle) { toggle.setAttribute("aria-expanded", String(open)); toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu"); }
+  let backdrop = document.getElementById("navBackdrop");
+  if (open && !backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.id = "navBackdrop"; backdrop.className = "nav-backdrop";
+    backdrop.dataset.action = "close-nav";
+    document.getElementById("dashboard").appendChild(backdrop);
+  } else if (!open) backdrop?.remove();
+  if (focus && open) document.querySelector("#sidebar .nav-link.active, #sidebar .nav-link")?.focus({ preventScroll: true });
+  if (focus && !open) toggle?.focus({ preventScroll: true });
+}
+phoneQuery.addEventListener?.("change", () => setNavOpen(false));
 
 function renderAppShell() {
   const name = state.profile?.full_name || state.user?.email?.split("@")[0] || "Student";
@@ -439,6 +459,8 @@ function renderAppShell() {
     <div class="sidebar-footer">${icon(BUILDINGS[state.building].icon)} Viewing <strong>${buildingName()}</strong></div>`;
 
   document.getElementById("topbar").innerHTML = `
+    <button class="icon-button menu-toggle" type="button" data-action="toggle-nav" aria-controls="sidebar"
+      aria-expanded="${document.body.classList.contains("nav-open")}" aria-label="Open menu">${icon("menu")}</button>
     <span class="topbar-title">GlitchWayve</span>
     <form class="topbar-search" role="search" data-form="global-search">
       ${icon("search")}
@@ -1320,6 +1342,7 @@ function openProfileMenu(anchor) {
     <p style="padding:6px 10px;margin:0"><strong>${escapeHTML(state.profile?.full_name || "")}</strong><br><small class="muted">${escapeHTML(state.user.email)}</small></p>
     <button class="btn btn-ghost" role="menuitem" type="button" data-section="settings">${icon("settings")} Settings</button>
     <button class="btn btn-ghost" role="menuitem" type="button" data-section="myrequests">${icon("activity")} My requests</button>
+    <button class="btn btn-ghost phone-only" role="menuitem" type="button" data-action="start-tour" data-tour-section="">${icon("circle-help")} Tutorial</button>
     <button class="btn btn-ghost" role="menuitem" type="button" data-action="sign-out">${icon("log-out")} Sign out</button>`;
   document.body.appendChild(menu);
   refreshIcons();
@@ -1419,7 +1442,7 @@ const MANUAL = [
   { icon: "rocket", title: "Getting started", tour: "shell", section: "home", steps: [
     "Sign in with your CIIT email (name@ciit.edu.ph) and password.",
     "Use the building switch at the top right to choose Interweave or Glitch Tower. Every page changes to match.",
-    "Use the sidebar on the left to move between pages. On small screens it shows icons only.",
+    "Use the sidebar on the left to move between pages. On tablets it shows icons only. On phones, tap the menu button at the top left to open it.",
     "Use the search box at the top to find any service, room or office in both buildings.",
     "Press Tutorial at the top any time to replay the guided tour."] },
   { icon: "house", title: "Home", tour: "home", section: "home", steps: [
@@ -1502,7 +1525,7 @@ function renderManualPage() {
 // "shell" steps belong to the always-visible sidebar/top bar. Other steps name their page.
 const TOUR_STEPS = [
   { section: "shell", target: "#sidebar .brand", title: "Welcome to GlitchWayve", text: "This is your CIIT student dashboard. Services, rooms, offices and your requests for Interweave and Glitch Tower are all here." },
-  { section: "shell", target: "#sidebar", title: "Main menu", text: "Jump between pages here. Services are grouped by category. On small screens only icons show, so tap one to open it." },
+  { section: "shell", target: "#sidebar", title: "Main menu", text: "Jump between pages here. Services are grouped by category. On tablets only icons show. On phones, tap the menu button at the top left to open it." },
   { section: "shell", target: ".building-switch", title: "Switch buildings", text: "Interweave and Glitch Tower have different services, rooms and hours. Switching changes the colours and what every page shows." },
   { section: "shell", target: ".topbar-search", title: "Search everything", text: "Type a service, room or office name and press Enter. It searches both buildings and shows the current one first." },
   { section: "shell", target: ".tour-button", title: "Tutorial button", text: "Replay this tour whenever you like. The User Manual in the menu has the same steps in writing." },
@@ -1585,6 +1608,7 @@ function startTour(section = null) {
 }
 function endTour(finished) {
   tour.active = false; tour.token++;
+  setNavOpen(false);
   document.getElementById("tourRoot")?.remove();
   window.removeEventListener("resize", positionTour);
   window.removeEventListener("scroll", positionTour, true);
@@ -1624,6 +1648,7 @@ async function showTourStep(i) {
   root.querySelector("#tourNext").textContent = i === tour.steps.length - 1 ? "Finish" : "Next";
 
   const wanted = step.section === "shell" ? null : step.section;
+  setNavOpen(step.target.startsWith("#sidebar"));
   if (step.before) step.before();
   if (wanted && state.section !== wanted) navigateTo(wanted);
   else if (step.before) renderCurrentPage();
@@ -1632,6 +1657,7 @@ async function showTourStep(i) {
   if (token !== tour.token || !tour.active) return;
   if (el) el.scrollIntoView({ block: "center", inline: "nearest" });
   positionTour();
+  setTimeout(positionTour, 320); // re-measure once the phone menu has finished sliding
   root.querySelector("#tourNext").focus({ preventScroll: true });
 }
 function positionTour() {
@@ -1823,6 +1849,8 @@ async function handleClick(event) {
 
   const { action, id } = target.dataset;
   switch (action) {
+    case "toggle-nav": return setNavOpen(!document.body.classList.contains("nav-open"), { focus: true });
+    case "close-nav": return setNavOpen(false, { focus: true });
     case "close-dialog": return closeDialog();
     case "close-dialog-backdrop": if (event.target === target) closeDialog(); return;
     case "close-and-refresh": closeDialog(); return renderCurrentPage();
@@ -1979,7 +2007,10 @@ function handleKeydown(event) {
     }
     return;
   }
-  if (event.key === "Escape") { document.getElementById("profileMenu")?.remove(); closeDialog(); }
+  if (event.key === "Escape") {
+    if (document.body.classList.contains("nav-open")) return setNavOpen(false, { focus: true });
+    document.getElementById("profileMenu")?.remove(); closeDialog();
+  }
   // Arrow keys move between the two building buttons
   if (event.target.closest?.(".building-switch") && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
     setBuilding(otherBuilding());

@@ -92,7 +92,7 @@ html.high-contrast[data-building="glitch"] {
 
 /* ---------- 2. Base ---------- */
 * { box-sizing: border-box; }
-html { font-size: var(--font-size); }
+html { font-size: var(--font-size); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   margin: 0; min-width: 320px; background: var(--page); color: var(--text);
   font-family: Inter, Arial, sans-serif; line-height: 1.55;
@@ -103,7 +103,7 @@ h1 { font-size: 1.75rem; } h2 { font-size: 1.3rem; } h3 { font-size: 1.05rem; }
 p { margin: 0 0 .75em; }
 a { color: var(--accent); }
 button, input, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
@@ -159,7 +159,7 @@ textarea { min-height: 96px; resize: vertical; }
 .badge-building { background: var(--accent-soft); color: var(--text); border-color: transparent; }
 
 /* ---------- 4. Login ---------- */
-.login-screen { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--surface); }
+.login-screen { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--surface); }
 .login-art { background: var(--hero); color: var(--on-brand); padding: 56px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
 .login-art::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: var(--stripe); }
 .login-art h1 { font-size: 2.4rem; }
@@ -174,7 +174,7 @@ textarea { min-height: 96px; resize: vertical; }
 .setup-warning { background: var(--warn-bg); color: var(--warn-text); padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: .92rem; }
 
 /* ---------- 5. Layout shell ---------- */
-.dashboard { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: 100vh; }
+.dashboard { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
 .sidebar {
   position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--sidebar, var(--brand)); color: var(--on-brand);
   padding: 20px 14px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid transparent;
@@ -375,7 +375,7 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color:
 
 /* Dialog */
 .dialog-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(5, 12, 20, .55); display: grid; place-items: center; padding: 20px; }
-.dialog { width: 100%; max-width: 560px; max-height: calc(100vh - 40px); overflow-y: auto; background: var(--surface); color: var(--text); border-radius: 20px; box-shadow: var(--shadow-lg); border: 1px solid var(--border); }
+.dialog { width: 100%; max-width: 560px; max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); overscroll-behavior: contain; overflow-y: auto; background: var(--surface); color: var(--text); border-radius: 20px; box-shadow: var(--shadow-lg); border: 1px solid var(--border); }
 .dialog.wide { max-width: 760px; }
 .dialog-head { display: flex; justify-content: space-between; gap: 12px; padding: 20px 22px 0; }
 .dialog-head h2 { margin: 0; }
@@ -568,3 +568,130 @@ html[data-building="glitch"] .tour-ring { box-shadow: 0 0 0 3px var(--neon-cyan)
 .fi-form-sub { margin: 20px 0 8px; font-size: 1rem; }
 .fi-public-warning { display: flex; gap: 10px; align-items: flex-start; background: var(--err-bg); color: var(--err-text); padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 14px; font-size: .92rem; }
 .fi-public-warning svg.lucide { flex: none; width: 20px; height: 20px; }
+
+/* =========================================================
+   Phones (≤ 640px)
+   The sidebar becomes a slide-in menu opened from the top bar,
+   dialogs become bottom sheets and the chat fills the screen.
+   ========================================================= */
+.menu-toggle, .phone-only { display: none !important; }
+.nav-backdrop { display: none; }
+
+/* Hover lift only on devices that can hover, so cards don't stay "lifted" after a tap */
+@media (hover: none) {
+  .service-card:hover { transform: none; }
+}
+
+@media (max-width: 640px) {
+  :root { --sidebar-width: 0px; }
+  .menu-toggle { display: inline-grid !important; flex: none; }
+  .phone-only { display: inline-flex !important; }
+
+  /* Layout shell */
+  .dashboard { grid-template-columns: minmax(0, 1fr); }
+  .sidebar {
+    position: fixed; z-index: 55; top: 0; bottom: 0; left: 0; height: auto;
+    width: min(300px, 86vw); padding: calc(18px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+    transform: translateX(-100%); visibility: hidden; overscroll-behavior: contain;
+    transition: transform .25s ease, visibility 0s linear .25s; box-shadow: var(--shadow-lg);
+  }
+  body.nav-open .sidebar { transform: none; visibility: visible; transition: transform .25s ease; }
+  body.nav-open { overflow: hidden; }
+  .nav-backdrop { display: block; position: fixed; inset: 0; z-index: 54; background: rgba(5, 12, 20, .5); }
+  /* Show the full menu labels again inside the drawer (the tablet rule hides them) */
+  .sidebar .brand-copy, .sidebar .brand-fallback .brand-copy { display: flex; }
+  .nav-link span { display: inline; }
+  .nav-group-label, .sidebar-footer { display: block; }
+  .nav-link { justify-content: flex-start; padding: 10px 12px; min-height: 46px; }
+  .sidebar .brand { justify-content: flex-start; padding: 0 8px 6px; }
+  .sidebar .brand-logo { max-height: 40px; }
+
+  /* Top bar */
+  .topbar { gap: 8px; padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 8px calc(12px + env(safe-area-inset-left)); }
+  .topbar-title { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .topbar-right { gap: 6px; }
+  .tour-button { display: none; }
+  .building-switch { padding: 3px; }
+  .building-switch button { min-height: 38px; padding: 6px 10px; }
+  .profile-button { padding: 4px; gap: 0; }
+  .profile-button > svg.lucide { display: none; }
+  .menu-popover { position: fixed; right: 12px; left: auto; top: calc(64px + env(safe-area-inset-top)); width: min(280px, calc(100vw - 24px)); }
+  .menu-popover button { min-height: 44px; }
+
+  /* Page content */
+  h1 { font-size: 1.45rem; }
+  h2 { font-size: 1.18rem; }
+  .main-content { padding: 18px calc(14px + env(safe-area-inset-right)) 104px calc(14px + env(safe-area-inset-left)); }
+  .site-footer { padding: 14px 16px calc(88px + env(safe-area-inset-bottom)); flex-direction: column; }
+  .offline-banner { padding: 10px 16px; }
+  .card { padding: 16px; }
+  .hero { padding: 20px; gap: 16px; }
+  .hero-actions .btn { width: 100%; }
+  html[data-building="glitch"] .hero::before { width: 70px; opacity: .3; }
+  .section { margin-top: 22px; }
+  .section-head { flex-wrap: wrap; }
+  .page-header { align-items: flex-start; }
+  .grid-auto { grid-template-columns: minmax(0, 1fr); }
+  .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .quick-tile { min-height: 96px; padding: 14px; }
+  .finder-input input { min-height: 52px; font-size: 1rem; }
+  .other-building summary { padding: 14px; }
+  .other-building .grid { padding: 12px; }
+
+  /* Tabs and filter chips scroll sideways instead of wrapping into tall stacks */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: none; white-space: nowrap; }
+
+  /* PULSE progress steps: smaller labels so five stages fit */
+  .steps li { font-size: .68rem; padding-top: 24px; overflow-wrap: anywhere; }
+  .record-card { padding: 14px; }
+
+  /* Floors: the floor picker becomes a horizontal strip above the rooms */
+  .floor-list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
+  .floor-button { flex: 0 0 auto; max-width: 78vw; scroll-snap-align: start; }
+
+  /* Forms: 16px text stops iOS Safari from zooming in when a field is tapped */
+  input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="date"],
+  input[type="time"], input[type="number"], select, textarea, .cb-form input { font-size: max(16px, 1rem); }
+  .dialog-actions { justify-content: stretch; }
+  .dialog-actions .btn { flex: 1 1 auto; }
+
+  /* Dialogs slide up from the bottom like a native sheet */
+  .dialog-backdrop { padding: 0; place-items: end stretch; }
+  .dialog, .dialog.wide { max-width: none; max-height: 92vh; max-height: 92dvh; border-radius: 20px 20px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  .dialog-head { padding: 18px 16px 0; }
+  .dialog-body { padding: 12px 16px 20px; }
+
+  /* Toasts sit above the chat button and never run off screen */
+  .toast-root { left: 16px; right: 16px; transform: none; bottom: calc(84px + env(safe-area-inset-bottom)); }
+
+  /* Chat: round icon button, and the panel fills the screen when open */
+  .chatbot-launcher { right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); width: 56px; height: 56px; padding: 0; justify-content: center; }
+  .chatbot-root { inset: 0; right: 0; left: 0; bottom: 0; z-index: 70; }
+  .cb-panel { width: 100%; height: 100vh; height: 100dvh; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .cb-msg { max-width: 92%; }
+
+  /* Tutorial card spans the width on phones */
+  .tour-card { padding: 16px; }
+
+  /* FoundIt */
+  .fi-thumb { width: 68px; height: 68px; }
+  .fi-card-main { gap: 12px; padding: 12px; }
+  .fi-card-actions { padding: 0 12px 12px; }
+  .fi-auth-head > svg.lucide { width: 32px; height: 32px; }
+  .fi-otp input { font-size: 1.3rem; letter-spacing: .3em; }
+}
+
+/* Very narrow phones (e.g. 320–380px): drop the top-bar wordmark, the menu already shows the brand */
+@media (max-width: 380px) {
+  .topbar-title { display: none; }
+  .topbar-right { margin-left: auto; }
+  .quick-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Phones turned sideways: keep the sheet and chat usable on a short screen */
+@media (max-height: 480px) and (orientation: landscape) {
+  .dialog, .dialog.wide { max-height: 100vh; max-height: 100dvh; border-radius: 0; }
+  .cb-panel { height: 100vh; height: 100dvh; }
+}
