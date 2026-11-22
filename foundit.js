@@ -25,7 +25,7 @@
   const fi = {
     client: null,
     stage: null,           // "logged_out" | "needs_enroll" | "needs_verify" | "ready"
-    view: "browse",        // "browse" | "post" | "mine" | "account" | "detail" | "edit"
+    view: "browse",        // "browse" | "post" | "mine" | "account" | "rewards" | "detail" | "edit"
     detailId: null,
     backTo: "browse",
     query: "", type: null, category: null,
@@ -41,7 +41,9 @@
     photo: null,           // { blob, url } picked in the post form
     formCategory: "",
     formType: "LOST",
-    confirmResolve: null
+    confirmResolve: null,
+    rewards: null,         // last my_reward_status() result
+    lastRedeemed: null     // last ticket a staff member redeemed (confirmation card)
   };
 
   // ---------- Validation (same rules as the app and the database) ----------
@@ -76,6 +78,8 @@
       if (/otp|expired/.test(text)) return "Invalid or expired code. Request a new one and try again.";
       return "Authentication failed. Please try again.";
     }
+    // Messages written by FoundIt's own reward functions are safe to show as-is.
+    if (String(e?.message || "").startsWith("REWARD:")) return e.message.slice(7).trim();
     if (e?.status === 401 || code === "pgrst301" || text.includes("jwt")) return "Your session expired. Please log in again.";
     if (code === "42501" || e?.status === 403 || text.includes("row-level security")) return "You are not allowed to do that.";
     if (code === "23505" || text.includes("duplicate")) return "You already have an open post for this item.";
@@ -135,6 +139,7 @@
       if (event === "SIGNED_OUT" && !fi.resetting) {
         stopListening();
         fi.stage = "logged_out"; fi.enrollment = null; fi.unread = 0;
+        fi.rewards = null; fi.lastRedeemed = null;
         if (isActive()) draw();
       }
     });
@@ -218,7 +223,7 @@
     else if (fi.stage === "needs_verify") body = verifyView();
     else {
       const tabs = [["browse", "Browse", "search"], ["post", "Report an item", "plus-circle"], ["mine", "My reports", "clipboard-list"], ["account", "Account", "user-round"]];
-      const current = fi.view === "edit" ? "mine" : fi.view === "detail" ? fi.backTo : fi.view;
+      const current = fi.view === "edit" ? "mine" : fi.view === "rewards" ? "account" : fi.view === "detail" ? fi.backTo : fi.view;
       body = `
         <div class="tabs" role="tablist" aria-label="FoundIt sections">
           ${tabs.map(([key, label, ic]) => `<button class="tab" type="button" role="tab" aria-selected="${current === key}" data-fi="view" data-view="${key}">${icon(ic)} ${label}</button>`).join("")}
@@ -244,6 +249,7 @@
     try {
       if (fi.view === "mine") box.innerHTML = await mineView();
       else if (fi.view === "account") box.innerHTML = await accountView();
+      else if (fi.view === "rewards") box.innerHTML = await rewardsView();
       else if (fi.view === "detail") box.innerHTML = await detailView(fi.detailId);
       else if (fi.view === "edit") {
         const item = await getItem(fi.detailId);
@@ -869,7 +875,7 @@
     if (!(await confirmDialog(`Mark "${item.name}" as claimed?`, "Others will see this item has been returned to its owner.", "Mark claimed"))) return;
     const { error } = await client().from("items").update({ status: "CLAIMED" }).eq("id", id);
     if (error) throw error;
-    showToast("Marked as claimed.");
+    showToast(item.type === "FOUND" ? "Marked as returned. Check Rewards for your points." : "Marked as claimed.");
     drawView();
   }
 
@@ -886,18 +892,138 @@
 
   // ---------- Account ----------
   async function accountView() {
-    const items = await myItems();
+    const [items] = await Promise.all([myItems(), loadRewards().catch(() => null)]);
     const open = items.filter((i) => i.status === "OPEN").length;
+    const r = fi.rewards;
+    const rewardLine = !r ? "Earn points by returning found items"
+      : r.ticket && !r.ticket.redeemed_at && r.ticket.term_name === r.term?.name ? "You won this term's reward ticket!"
+      : !r.term ? "No active term"
+      : `${r.my_points} pts this term${r.my_rank ? ` · Rank #${r.my_rank}` : ""}`;
     return `
       <div class="grid grid-2">
         <div class="card fi-account-row">${icon("circle-user-round")}<div><strong>${escapeHTML(maskEmail(myEmail()))}</strong><p class="muted">Signed in to FoundIt</p></div></div>
         <div class="card fi-account-row">${icon("shield-check")}<div><strong>Two-step verification</strong><p class="muted">On — Google Authenticator</p></div></div>
         <div class="card fi-account-row">${icon("clipboard-list")}<div><strong>My reports</strong><p class="muted">${items.length} total, ${open} open</p></div></div>
+        <button class="card fi-account-row fi-link-card" type="button" data-fi="view" data-view="rewards">${icon("trophy")}<div><strong>Points &amp; rewards</strong><p class="muted">${escapeHTML(rewardLine)}</p></div>${icon("chevron-right")}</button>
       </div>
       <div class="row" style="margin-top:20px">
         <button class="btn btn-danger" type="button" data-fi="logout">${icon("log-out")} Log out of FoundIt</button>
         <span class="muted fi-small">This only signs you out of FoundIt. Your GlitchWayve login stays as it is.</span>
       </div>`;
+  }
+
+  // ---------- Points & rewards ----------
+  // All rules (what counts as a point, one winner per term, ticket expiry, single use)
+  // are enforced by FoundIt's database functions, not here.
+  async function loadRewards() {
+    const { data, error } = await client().rpc("my_reward_status");
+    if (error) throw error;
+    fi.rewards = data;
+    return data;
+  }
+
+  const dateLong = (v) => formatDate(v, false);
+  const dateTime = (v) => formatDate(v, true);
+
+  async function rewardsView() {
+    const s = await loadRewards();
+    const back = `<button class="btn btn-sm btn-ghost" type="button" data-fi="view" data-view="account">${icon("arrow-left")} Account</button>`;
+    const term = s.term;
+    let termCard;
+    if (!term) {
+      termCard = `<div class="card"><strong>No active term</strong><p class="muted">Points start counting when the school opens the next term.</p></div>`;
+    } else {
+      const note = !s.ranking_closed
+        ? `Points count until ${dateTime(term.reward_at)}. The top student then gets a reward ticket, valid until ${dateLong(term.ends_at)}.`
+        : s.winner_chosen && s.ticket?.term_name !== term.name ? "Ranking closed. This term's reward ticket has been given out."
+        : s.winner_chosen ? "Ranking closed. You won this term's reward!"
+        : "Ranking closed. Nobody earned a point this term.";
+      termCard = `
+        <div class="card fi-points">
+          <p class="eyebrow">${icon("calendar")} ${escapeHTML(term.name)}</p>
+          <p class="fi-points-num"><strong>${Number(s.my_points) || 0}</strong> <span>${s.my_points === 1 ? "point" : "points"} this term</span></p>
+          <p class="muted">${s.my_rank ? `Rank #${Number(s.my_rank)}` : "Not ranked yet"}</p>
+          <hr>
+          <p>${escapeHTML(note)}</p>
+        </div>`;
+    }
+    const board = s.leaderboard || [];
+    const leaderboard = term ? `
+      <div class="card">
+        <h3 style="margin-top:0">Top finders this term</h3>
+        ${board.length ? `<ol class="fi-board">${board.map((e) => `
+          <li class="${e.is_me ? "fi-me" : ""}"><span class="fi-rank">#${Number(e.rank)}</span><span class="fi-board-name">${escapeHTML(e.name)}${e.is_me ? " (you)" : ""}</span><span>${Number(e.points)} pt${e.points === 1 ? "" : "s"}</span></li>`).join("")}</ol>`
+          : '<p class="muted">No successful returns yet. Be the first!</p>'}
+      </div>` : "";
+    return `
+      ${back}
+      <div class="fi-rewards">
+        ${s.ticket ? ticketCard(s.ticket) : ""}
+        ${termCard}
+        <div class="card">
+          <h3 style="margin-top:0">How to earn points</h3>
+          <ul class="fi-steps">
+            <li>Post an item you <strong>found</strong>.</li>
+            <li>The owner taps “This is mine — claim it” on your post.</li>
+            <li>After you hand it back, mark the post as claimed: <strong>+1 point</strong>.</li>
+          </ul>
+          <p class="muted fi-small">Points reset to 0 every term. Only one student wins each term, and the ticket can be used once.</p>
+        </div>
+        ${leaderboard}
+        ${s.is_staff ? staffRedeemCard() : ""}
+      </div>`;
+  }
+
+  function ticketCard(t) {
+    // Display only: the server is what actually refuses expired or used tickets.
+    const expired = new Date(t.expires_at) <= new Date();
+    const active = !t.redeemed_at && !expired;
+    const label = t.redeemed_at ? `Used on ${dateTime(t.redeemed_at)}`
+      : expired ? `Expired on ${dateLong(t.expires_at)}`
+      : `Valid until ${dateTime(t.expires_at)}`;
+    return `
+      <div class="card fi-ticket ${active ? "fi-ticket-active" : ""}">
+        ${icon("trophy")}
+        <strong>Top Finder reward ticket</strong>
+        <span>${escapeHTML(t.term_name)} · ${Number(t.points)} successful returns</span>
+        <span class="fi-ticket-code">${escapeHTML(t.code)}</span>
+        <span class="fi-ticket-status ${expired && !t.redeemed_at ? "fi-expired" : ""}">${escapeHTML(label)}</span>
+        ${active ? '<p class="fi-small">Show this code at the Student Admin office to claim your school reward. It can only be used once.</p>' : ""}
+      </div>`;
+  }
+
+  /** Shown only to accounts listed in reward_staff (checked again by the server). */
+  function staffRedeemCard() {
+    const r = fi.lastRedeemed;
+    return `
+      <div class="card">
+        <h3 style="margin-top:0" class="row">${icon("shield-check")} Student Admin: redeem a ticket</h3>
+        <form data-fi-form="redeem" novalidate>
+          <div class="field"><label for="fiTicketCode">Ticket code (e.g. FI-1A2B-3C4D)</label>
+            <input id="fiTicketCode" name="code" maxlength="16" autocomplete="off" autocapitalize="characters" spellcheck="false" class="fi-ticket-input">
+            <small class="form-error" id="fiRedeemErr" role="alert"></small></div>
+          <button class="btn btn-primary" type="submit">${icon("ticket-check")} Validate &amp; mark as used</button>
+        </form>
+        ${r ? `<div class="fi-redeemed"><strong>Valid — reward released</strong><span>${escapeHTML(r.code)} · ${escapeHTML(r.student)} · ${escapeHTML(r.term_name)} · ${Number(r.points)} returns</span></div>` : ""}
+      </div>`;
+  }
+
+  async function submitRedeem(form) {
+    const code = form.elements.code.value.trim().toUpperCase();
+    if (code.length < 6) return setError("fiRedeemErr", "Enter the full ticket code.");
+    setError("fiRedeemErr", "");
+    setBusy(form, true);
+    fi.lastRedeemed = null;
+    try {
+      const { data, error } = await client().rpc("redeem_reward_ticket", { p_code: code });
+      if (error) throw error;
+      fi.lastRedeemed = data;
+      showToast("Ticket redeemed.");
+      drawView();
+    } catch (e) {
+      setBusy(form, false);
+      setError("fiRedeemErr", friendly(e));
+    }
   }
 
   // =========================================================
@@ -967,6 +1093,7 @@
     if (kind === "reset-send") return submitResetSend(form);
     if (kind === "reset") return submitReset(form);
     if (kind === "item") return submitItem(form);
+    if (kind === "redeem") return submitRedeem(form);
     if (kind === "comment" || kind === "claim") {
       const isClaim = kind === "claim";
       const raw = isClaim ? form.elements.proof.value : form.elements.text.value;
@@ -987,6 +1114,10 @@
 
   let searchTimer;
   function onInput(event) {
+    if (event.target.id === "fiTicketCode") {
+      event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 16);
+      return setError("fiRedeemErr", "");
+    }
     if (event.target.id !== "fiSearch") return;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { fi.query = event.target.value.slice(0, 60); loadList(); }, 300);

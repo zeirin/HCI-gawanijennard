@@ -556,6 +556,32 @@ html[data-building="glitch"] .tour-ring { box-shadow: 0 0 0 3px var(--neon-cyan)
 .fi-account-row { display: flex; gap: 14px; align-items: center; }
 .fi-account-row > svg.lucide { width: 32px; height: 32px; color: var(--accent); flex: none; }
 .fi-account-row p { margin: 2px 0 0; }
+.fi-link-card { width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer; }
+.fi-link-card:hover { border-color: var(--accent); }
+.fi-link-card > div { flex: 1; min-width: 0; }
+.fi-link-card > svg.lucide:last-child { width: 20px; height: 20px; color: var(--muted); }
+
+/* Points & rewards */
+.fi-rewards { display: grid; gap: 14px; max-width: 720px; margin-top: 12px; }
+.fi-points-num { display: flex; align-items: baseline; gap: 8px; margin: 4px 0; }
+.fi-points-num strong { font-size: 2.6rem; line-height: 1; }
+.fi-points hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+.fi-ticket { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.fi-ticket > svg.lucide { width: 40px; height: 40px; color: var(--muted); }
+.fi-ticket-active { background: var(--ok-bg); color: var(--ok-text); border-color: transparent; }
+.fi-ticket-active > svg.lucide, .fi-ticket-active .fi-ticket-status { color: var(--ok-text); }
+.fi-ticket-code { font-family: ui-monospace, Consolas, monospace; font-size: 1.6rem; font-weight: 700; letter-spacing: .06em; user-select: all; }
+.fi-ticket-status { font-weight: 600; color: var(--muted); }
+.fi-ticket-status.fi-expired { color: var(--err-text); }
+.fi-ticket p { margin: 4px 0 0; }
+.fi-board { list-style: none; margin: 0; padding: 0; }
+.fi-board li { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+.fi-board li:first-child { border-top: 0; }
+.fi-board .fi-rank { font-weight: 700; min-width: 2.5em; }
+.fi-board .fi-board-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fi-board li.fi-me { font-weight: 700; }
+.fi-ticket-input { width: 100%; font-family: ui-monospace, Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.fi-redeemed { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; padding: 12px; border-radius: var(--radius-sm); background: var(--ok-bg); color: var(--ok-text); }
 
 @media (max-width: 900px) {
   .fi-detail { grid-template-columns: 1fr; }
