@@ -37,8 +37,14 @@
       answer: "Yes. Interweave uses CIIT navy and white. Glitch Tower uses charcoal with neon accents. The building name is always shown too.", section: "settings" },
 
     // --- Home and personalisation ---
+    { q: "How do I do the Carehub check-in?", keywords: ["carehub", "care", "hub", "checkin", "check-in", "health", "wellness", "declaration", "feeling", "form"],
+      answer: "The CIITzen Care Hub form appears once a day when you open GlitchWayve. You can also press Carehub check-in on Home or Carehub in Quick access. Answer the health and mood questions, then press Submit. If you need someone to talk to, the Guidance & Counseling Center can help, and the NCMH Crisis Hotline 1553 is free and open 24/7.", section: "home" },
+    { q: "What's on the canteen menu today?", keywords: ["canteen", "menu", "food", "lunch", "breakfast", "snack", "eat", "meal", "cafeteria", "price"],
+      answer: "Open Canteen & Shuttle and choose Food menu. It shows today's meals and snacks, with photos and prices, for the building you're viewing; Interweave and Glitch Tower have different canteens. The Today card on Home shows a preview.", section: "campus" },
+    { q: "When is the next shuttle?", keywords: ["shuttle", "van", "bus", "ride", "schedule", "trip", "next", "transport", "commute"],
+      answer: "The Today card on Home shows the next shuttle from the building you're viewing. Open Canteen & Shuttle and choose Shuttle schedule for every trip between Interweave and Glitch Tower. The last trip from Interweave is at 7:00 PM, and each van fits 16 people.", section: "campus" },
     { q: "How do I pin or hide services in Quick access?", keywords: ["quick", "access", "pin", "unpin", "shortcut", "customize", "favorite", "hide"],
-      answer: "On Home, press Customize in Quick access to pin the services you use most or hide ones you don't need. You can also open a service card and press Pin.", section: "home" },
+      answer: "Quick access is the panel on the right side of the screen (on tablets, open it with the Quick access button at the top; on phones it is on Home). Press Customize to pin the services you use most or hide ones you don't need. You can also open a service card and press Pin.", section: "home" },
     { q: "How do I hide an announcement?", keywords: ["announcement", "announcements", "news", "hide", "dismiss", "show", "hidden"],
       answer: "On Home, press Hide on an announcement to dismiss it. Press Show hidden to bring hidden ones back. Announcements are shown for the building you picked.", section: "home" },
     { q: "What does the bell icon mean?", keywords: ["bell", "notification", "notifications", "alert", "update", "dot", "new"],

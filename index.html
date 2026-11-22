@@ -12,12 +12,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Bump ?v= whenever style.css or a .js file changes, so browsers load the new copy instead of an old cached one. -->
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=14">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="script.js?v=9" defer></script>
-  <script src="foundit.js?v=9" defer></script>
-  <script src="chatbot.js?v=9" defer></script>
+  <script src="script.js?v=14" defer></script>
+  <script src="foundit.js?v=14" defer></script>
+  <script src="chatbot.js?v=14" defer></script>
+  <script src="campus.js?v=14" defer></script>
+  <script src="carehub.js?v=14" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -34,7 +36,11 @@
         <i data-lucide="wifi-off"></i>
         <span>You're offline. You can still read what's on screen. We'll reload when you're back online.</span>
       </div>
-      <main id="mainContent" class="main-content" tabindex="-1"></main>
+      <div class="content-row">
+        <main id="mainContent" class="main-content" tabindex="-1"></main>
+        <!-- Quick access: right-side panel on PC, slide-in on tablet (script.js → renderQuickPanel) -->
+        <aside id="quickPanel" class="quick-panel" aria-labelledby="quickPanelTitle"></aside>
+      </div>
       <footer class="site-footer">
         <span>GlitchWayve · CIIT Student Dashboard prototype</span>
         <span>Items marked <strong>Sample details</strong> are not yet verified with CIIT.</span>

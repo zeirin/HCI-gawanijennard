@@ -43,22 +43,57 @@ const CATEGORIES = [
   { section: "support", category: "Support", icon: "life-buoy", blurb: "IT, Edusuite and enrollment help, plus PULSE concerns." }
 ];
 
+// One distinct icon per service, so no two services look alike at a glance.
+// (Services an admin adds later keep the icon chosen in the Admin Panel.)
+const SERVICE_ICONS = {
+  "3d-lab": "box", "adobe-creative-cloud": "palette", "book-a-space": "calendar-plus", "borrow-a-book": "book-marked",
+  "canvas": "notebook-tabs", "chatgpt-edu": "bot", "course-or-subject-descriptions": "book-text", "edusuite": "school",
+  "industry-readiness-goals": "target", "mac-lab": "laptop", "online-library": "library", "pc-lab": "monitor",
+  "school-calendar": "calendar-days", "studio-and-recording-rooms": "mic", "the-forge-maker-lab": "hammer", "toon-boom": "clapperboard",
+  "acceptance-request": "mail-check", "company-evaluation": "clipboard-check", "endorsement-request": "mail-plus",
+  "industry-partner-list": "handshake", "job-search-websites": "search-check", "kalibrr": "briefcase-business",
+  "placement-consultation-request": "calendar-clock", "practicum-group": "network", "practicum-guidelines": "scroll-text",
+  "practicum-logs": "notebook-pen", "practicum-profile-registration": "user-round-pen", "working-student-crediting-application": "badge-check",
+  "carehub": "heart-pulse", "consult-with-a-dentist": "smile", "consult-with-a-doctor": "stethoscope",
+  "guidance-appointment-scheduler": "hand-heart", "medical-result-submission": "file-heart", "talk-with-a-school-nurse": "heart-handshake",
+  "vaccine-submission": "syringe",
+  "application-for-excuse": "file-check", "application-for-graduation": "graduation-cap", "apply-for-pe-exemption": "dumbbell",
+  "authorized-withdrawal-form": "file-x", "change-of-grade": "pencil-line", "completion-of-grade": "check-check",
+  "file-a-leave-of-absence": "calendar-off", "forge-equipment-borrowing": "package-open", "id-submission": "id-card",
+  "request-a-copy-of-school-records": "file-text", "shifting-of-program": "arrow-left-right", "subject-dropping-form": "file-minus",
+  "ciit-discord-community": "message-circle", "ciit-market-place": "shopping-bag", "ciit-official-facebook-page": "megaphone",
+  "ciit-students-facebook-group": "messages-square", "ciit-website": "globe", "events-and-competitions": "trophy",
+  "playlab": "joystick", "refer-a-friend": "user-plus", "refer-a-sibling": "users-round", "rso-dashboard": "layout-dashboard",
+  "student-organizations": "flag", "students-games-and-apps": "gamepad-2", "students-works-and-projects": "image",
+  "edusuite-help-desk": "monitor-cog", "enrollment-helpdesk": "life-buoy", "it-helpdesk-service": "headset",
+  "it-knowledge-base": "book-open", "pulse-concerns-formerly-itracker": "message-square-warning", "student-services-evaluator": "star"
+};
+function serviceIcon(s) { return SERVICE_ICONS[s.service_code] || s.icon_name || "circle-dot"; }
+// Each category has its own colour (style.css → .cat-*). The text label always stays, so colour is never the only cue.
+const CATEGORY_CLASS = {
+  "Academics & Formation": "cat-academics", "Requests": "cat-requests", "Careers": "cat-careers",
+  "Student Life": "cat-life", "Health & Wellness": "cat-health", "Support": "cat-support"
+};
+function catClass(category) { return CATEGORY_CLASS[category] || "cat-academics"; }
+
 // Sidebar groups. "staffOnly" items appear only for profiles with role = 'staff'.
 const NAV_GROUPS = [
   { label: "Find", items: [
     { section: "home", label: "Home", icon: "house" },
+    { section: "myrequests", label: "My Requests", icon: "list-checks", countBadge: true },
     { section: "finder", label: "Find a Service", icon: "search" },
-    { section: "manual", label: "User Manual", icon: "book-marked" },
     { section: "moving", label: "Moving Around", icon: "map" },
-    { section: "directory", label: "Help & Contact", icon: "contact" }
+    { section: "campus", label: "Canteen & Shuttle", icon: "clock" },
+    { section: "directory", label: "Help & Contact", icon: "contact" },
+    { section: "manual", label: "User Manual", icon: "book-marked" }
   ] },
-  { label: "Services", items: [
+  // "collapsible": shown as one "Services" button that opens and closes, so the menu fits without scrolling.
+  { label: "Services", collapsible: true, icon: "layers", items: [
     { section: "foundit", label: "FoundIt", icon: "package-search" },
     ...CATEGORIES.map((c) => ({ section: c.section, label: c.category, icon: c.icon }))
   ] },
   { label: "My activity", items: [
     { section: "pulse", label: "PULSE", icon: "activity", badge: "Simulation" },
-    { section: "myrequests", label: "My Requests", icon: "clipboard-list" },
     { section: "innovation", label: "Innovation Hub", icon: "lightbulb" }
   ] },
   { label: "More", items: [
@@ -89,6 +124,11 @@ const TIME_SLOTS = ["8:00 – 9:00 AM", "9:00 – 10:00 AM", "10:00 – 11:00 AM
 // 3. APP STATE
 // =========================================================
 const state = {
+  campusTab: "canteen",
+  menuDate: null,
+  openCount: 0,
+  servicesOpen: localStorage.getItem("gw-services-open") === "true",
+  quickPanelOpen: false,
   user: null,
   profile: null,
   building: localStorage.getItem("gw-building") || "interweave",
@@ -392,10 +432,19 @@ async function openDashboard() {
     return;
   }
   renderChatbotLauncher();
-  if (!location.hash) location.hash = `#/${state.building}/home`;
+  if (!location.hash) {
+    // Canteen staff start on their own campus's menu; everyone else starts on Home.
+    if (state.profile?.role === "canteen" && BUILDINGS[state.profile.canteen_building]) {
+      state.building = state.profile.canteen_building; state.campusTab = "canteen";
+      location.hash = `#/${state.building}/campus`;
+    } else location.hash = `#/${state.building}/home`;
+  }
   handleRouteChange();
   refreshUnreadCount();
-  maybeOfferTour();
+  refreshOpenCount();
+  // Students get the daily Carehub check-in first; the tutorial offer waits until it's not showing.
+  const carehubShown = await (window.Carehub?.maybePrompt() ?? false);
+  if (!carehubShown) maybeOfferTour();
 }
 
 function navigateTo(section) {
@@ -420,6 +469,7 @@ function handleRouteChange() {
   if (state.section === "staff" && !isStaff()) state.section = "home";
   applyBuildingTheme();
   setNavOpen(false);
+  setQuickPanelOpen(false);
   renderAppShell();
   renderCurrentPage();
 }
@@ -443,6 +493,16 @@ function setNavOpen(open, { focus = false } = {}) {
 }
 phoneQuery.addEventListener?.("change", () => setNavOpen(false));
 
+function renderNavLink(item) {
+  const active = state.section === item.section;
+  const count = item.countBadge && state.openCount ? `<span class="nav-count" id="navOpenCount" aria-label="${state.openCount} open">${state.openCount}</span>` : "";
+  return `
+    <button class="nav-link ${active ? "active" : ""}" type="button" data-section="${item.section}"
+      ${active ? 'aria-current="page"' : ""} title="${escapeHTML(item.label)}">
+      ${icon(item.icon)}<span>${escapeHTML(item.label)}</span>${item.badge ? `<span class="nav-badge">${escapeHTML(item.badge)}</span>` : ""}${count}
+    </button>`;
+}
+
 function renderAppShell() {
   const name = state.profile?.full_name || state.user?.email?.split("@")[0] || "Student";
   const initials = name.split(/[\s.,]+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("");
@@ -450,11 +510,15 @@ function renderAppShell() {
     ${renderBrand()}
     ${NAV_GROUPS.map((group) => {
       const items = group.items.filter((i) => !i.staffOnly || isStaff());
-      return `<div class="nav-group-label">${group.label}</div>` + items.map((item) => `
-        <button class="nav-link ${state.section === item.section ? "active" : ""}" type="button" data-section="${item.section}"
-          ${state.section === item.section ? 'aria-current="page"' : ""} title="${escapeHTML(item.label)}">
-          ${icon(item.icon)}<span>${escapeHTML(item.label)}</span>${item.badge ? `<span class="nav-badge">${escapeHTML(item.badge)}</span>` : ""}
-        </button>`).join("");
+      const links = items.map(renderNavLink).join("");
+      if (!group.collapsible) return `<div class="nav-group-label">${group.label}</div>` + links;
+      const open = state.servicesOpen || items.some((i) => i.section === state.section);
+      return `
+        <button class="nav-link nav-group-toggle ${!open && items.some((i) => i.section === state.section) ? "active" : ""}" type="button"
+          data-action="toggle-services" aria-expanded="${open}" aria-controls="navServices" title="${group.label}">
+          ${icon(group.icon)}<span>${group.label}</span>${icon("chevron-down", 'class="nav-chevron"')}
+        </button>
+        <div class="nav-group-items" id="navServices" ${open ? "" : "hidden"}>${links}</div>`;
     }).join("")}
     <div class="sidebar-footer">${icon(BUILDINGS[state.building].icon)} Viewing <strong>${buildingName()}</strong></div>`;
 
@@ -471,17 +535,81 @@ function renderAppShell() {
       <div class="building-switch" role="group" aria-label="Choose building">
         ${Object.entries(BUILDINGS).map(([key, b]) => `
           <button type="button" data-building-key="${key}" aria-pressed="${state.building === key}">
-            ${icon(b.icon)}<span class="label-full">${b.name}</span>
+            ${icon(b.icon)}<span class="label-full">${b.name}</span><span class="label-short" aria-hidden="true">${key === "interweave" ? "ITW" : "Glitch"}</span>
           </button>`).join("")}
       </div>
       <span class="sr-only" id="buildingLive" aria-live="polite"></span>
+      <button class="icon-button qp-toggle" type="button" data-action="toggle-quick-panel" aria-controls="quickPanel"
+        aria-expanded="${state.quickPanelOpen}" aria-label="Quick access shortcuts" title="Quick access">${icon("panel-right-open")}</button>
       <button class="btn btn-sm tour-button" type="button" data-action="start-tour" data-tour-section="">${icon("circle-help")}<span class="tour-label">Tutorial</span></button>
       <button class="icon-button" type="button" data-action="open-notifications" aria-label="Notifications">${icon("bell")}<span class="dot" id="notifDot" ${state.unread ? "" : "hidden"}></span></button>
       <button class="profile-button" type="button" data-action="open-profile-menu" aria-haspopup="true">
         <span class="avatar">${escapeHTML(initials || "S")}</span><span class="profile-name">${escapeHTML(name)}</span>${icon("chevron-down")}
       </button>
     </div>`;
+  renderQuickPanel();
   refreshIcons();
+}
+
+// ---------- Quick access panel (right side, like the original CIIT dashboard) ----------
+// PC: always visible on the right of every page. Tablet: slides in from the right via the
+// Quick access button in the top bar. Phone: hidden; Home shows the same shortcuts instead.
+const panelQuery = window.matchMedia("(min-width: 1200px)");
+const tabletQuery = window.matchMedia("(min-width: 641px) and (max-width: 1199px)");
+function renderQuickPanel() {
+  const panel = document.getElementById("quickPanel");
+  if (!panel || !state.data.loaded) return;
+  const quick = getQuickAccess(10);
+  panel.innerHTML = `<div class="qp-card">
+    <div class="qp-head">
+      <h2 id="quickPanelTitle">${icon("zap")} Quick access</h2>
+      <div class="row">
+        <button class="btn btn-sm" type="button" data-action="edit-shortcuts" aria-label="Customize Quick access">${icon("sliders-horizontal")}<span>Customize</span></button>
+        <button class="icon-button qp-close" type="button" data-action="toggle-quick-panel" aria-label="Close Quick access">${icon("x")}</button>
+      </div>
+    </div>
+    <div class="qp-list" data-tour="quick">
+      ${quick.length ? quick.map((s) => renderQuickItem(s, true)).join("")
+        : `<p class="muted" style="font-size:.9rem">Nothing here yet. Press Customize to pin services.</p>`}
+    </div>
+  </div>`;
+  refreshIcons();
+}
+function renderQuickItem(s, compact) {
+  const pinned = state.shortcutPrefs[s.service_code]?.is_pinned;
+  return `
+    <button class="qp-item ${catClass(s.category)}" type="button" data-action="open-service" data-id="${s.id}">
+      <span class="service-icon">${icon(serviceIcon(s))}</span>
+      <span class="qp-text"><strong>${escapeHTML(s.name)}</strong>
+        <small>${compact ? escapeHTML(s.category) : escapeHTML(locationLine(s)) + (s.hours ? " · " + escapeHTML(s.hours) : "")}</small></span>
+      ${pinned ? `<span class="qp-pin" title="Pinned">${icon("pin")}</span>` : ""}
+    </button>`;
+}
+function setQuickPanelOpen(open) {
+  state.quickPanelOpen = Boolean(open) && tabletQuery.matches;
+  document.body.classList.toggle("qp-open", state.quickPanelOpen);
+  document.querySelector(".qp-toggle")?.setAttribute("aria-expanded", String(state.quickPanelOpen));
+  let backdrop = document.getElementById("qpBackdrop");
+  if (state.quickPanelOpen && !backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.id = "qpBackdrop"; backdrop.className = "qp-backdrop"; backdrop.dataset.action = "close-quick-panel";
+    document.getElementById("dashboard").appendChild(backdrop);
+    document.querySelector("#quickPanel .qp-item, #quickPanel button")?.focus({ preventScroll: true });
+  } else if (!state.quickPanelOpen) backdrop?.remove();
+}
+tabletQuery.addEventListener?.("change", () => setQuickPanelOpen(false));
+
+/** Open-request count for the My Requests badge (cheap count queries, own records only). */
+const OPEN_STATUSES = ["Submitted", "In review", "Approved", "Ready for pickup", "Confirmed", "Rescheduled", "Borrowed", "Needs revision"];
+async function refreshOpenCount() {
+  if (!supabaseClient || !state.user) return;
+  const counts = await Promise.all(Object.keys(RECORD_TYPES).map((t) => supabaseClient.from(t)
+    .select("id", { count: "exact", head: true }).eq("student_id", state.user.id).in("status", OPEN_STATUSES)));
+  state.openCount = counts.reduce((sum, c) => sum + (c.count || 0), 0);
+  const link = document.querySelector('#sidebar [data-section="myrequests"]');
+  if (!link) return;
+  link.querySelector(".nav-count")?.remove();
+  if (state.openCount) link.insertAdjacentHTML("beforeend", `<span class="nav-count" aria-label="${state.openCount} open">${state.openCount}</span>`);
 }
 
 function renderChatbotLauncher() {
@@ -512,10 +640,13 @@ async function renderCurrentPage() {
     else if (state.section === "settings") renderSettingsPage();
     else if (state.section === "staff") await renderStaffPage();
     else if (state.section === "foundit") await window.FoundIt.render();
+    else if (state.section === "campus") await window.CampusToday.renderCampusPage();
   } catch (error) {
     showPageError(error);
     return;
   }
+  renderQuickPanel();
+  if (["home", "myrequests"].includes(state.section)) refreshOpenCount();
   refreshIcons();
 }
 
@@ -540,7 +671,10 @@ function getQuickAccess(limit = 8) {
   const matched = pool.filter((s) => !pinned.includes(s) && ((program && s.programs?.includes(program)) || (year && s.year_levels?.includes(year))))
     .sort((a, b) => Number(b.is_popular) - Number(a.is_popular) || a.name.localeCompare(b.name)).slice(0, 4);
   const popular = pool.filter((s) => s.is_popular && !pinned.includes(s) && !matched.includes(s));
-  return [...pinned, ...matched, ...popular].slice(0, limit);
+  // Carehub (the required wellbeing check-in) always comes first unless the student hid it.
+  const carehub = pool.find((s) => s.service_code === "carehub");
+  const rest = [...pinned, ...matched, ...popular].filter((s) => s !== carehub);
+  return (carehub ? [carehub, ...rest] : rest).slice(0, limit);
 }
 
 async function renderHomePage() {
@@ -549,7 +683,6 @@ async function renderHomePage() {
   const records = allRecords.filter((r) => r.student_id === state.user.id);
   const carehub = serviceByCode("carehub");
   const quick = getQuickAccess();
-  const popular = servicesIn().filter((s) => s.is_popular).slice(0, 6);
   const open = records.filter((r) => !["Completed", "Returned", "Declined", "Cancelled", "Accepted"].includes(r.status));
   const needsProfile = !state.profile?.program || !state.profile?.year_level;
 
@@ -561,8 +694,8 @@ async function renderHomePage() {
         <p>Find where a service is, when it's open, and what to bring — in ${buildingName()} or across campus.</p>
       </div>
       <div class="hero-actions">
-        ${carehub ? `<button class="btn btn-hero" type="button" data-action="open-service" data-id="${carehub.id}">${icon("heart-pulse")} Carehub check-in</button>` : ""}
-        <button class="btn btn-hero-ghost" type="button" data-section="myrequests">${icon("activity")} My requests${open.length ? ` (${open.length} open)` : ""}</button>
+        ${carehub ? `<button class="btn btn-hero" id="carehubHeroBtn" type="button" data-action="open-service" data-id="${carehub.id}">${icon("heart-pulse")} Carehub check-in</button>` : ""}
+        <button class="btn btn-hero-ghost" type="button" data-section="myrequests">${icon("list-checks")} My requests${open.length ? ` (${open.length} open)` : ""}</button>
       </div>
     </section>
 
@@ -579,6 +712,11 @@ async function renderHomePage() {
           </article>`).join("") : '<p class="muted">You\'re all caught up.</p>'}
     </section>
 
+    <!-- Today's canteen menu + next shuttle (campus.js fills this in) -->
+    <section class="card section ct-today" id="todayCard" data-tour="today" aria-label="Today's menu and shuttle">
+      <div class="skeleton" style="height:120px"></div>
+    </section>
+
 
     ${needsProfile ? `
       <div class="notice section" role="note">${icon("sparkles")}
@@ -586,42 +724,21 @@ async function renderHomePage() {
         <button class="btn btn-sm" style="margin-left:6px" type="button" data-action="edit-profile">Set program & year</button></div>
       </div>` : ""}
 
-    <section class="section" data-tour="quick" aria-labelledby="quickTitle">
+    <!-- Phones only: the right-side Quick access panel doesn't fit, so its shortcuts appear here. -->
+    <section class="section phone-quick" aria-labelledby="quickTitle">
       <div class="section-head">
         <h2 id="quickTitle">Quick access</h2>
         <button class="btn btn-sm" type="button" data-action="edit-shortcuts">${icon("sliders-horizontal")} Customize</button>
       </div>
       ${quick.length ? `<div class="quick-grid">${quick.map((s) => `
-        <button class="quick-tile ${state.shortcutPrefs[s.service_code]?.is_pinned ? "pinned" : ""} ${neonClass(s.name)}" type="button" data-action="open-service" data-id="${s.id}">
-          <span class="service-icon">${icon(s.icon_name)}</span>
+        <button class="quick-tile ${state.shortcutPrefs[s.service_code]?.is_pinned ? "pinned" : ""} ${catClass(s.category)}" type="button" data-action="open-service" data-id="${s.id}">
+          <span class="service-icon">${icon(serviceIcon(s))}</span>
           <span>${escapeHTML(s.name)}<br><small>${escapeHTML(s.category)}</small></span>
         </button>`).join("")}</div>`
         : renderEmptyState("No shortcuts yet", "Use Customize to pin the services you use most.", "pin")}
-    </section>
-
-    <div class="grid grid-2 section">
-      <section class="card" data-tour="popular" aria-labelledby="popularTitle">
-        <div class="section-head"><h2 id="popularTitle">Frequently searched</h2><span class="badge badge-building">${buildingName()}</span></div>
-        ${popular.length ? popular.map((s) => `
-          <button class="nav-link" style="color:var(--text);opacity:1" type="button" data-action="open-service" data-id="${s.id}">
-            ${icon(s.icon_name)}<span><strong>${escapeHTML(s.name)}</strong><br><small class="muted">${escapeHTML(locationLine(s))}${s.hours ? " · " + escapeHTML(s.hours) : ""}</small></span>
-          </button>`).join("") : '<p class="muted">No popular services listed for this building yet.</p>'}
-      </section>
-      <section class="card" data-tour="recent" aria-labelledby="recentTitle">
-        <div class="section-head"><h2 id="recentTitle">My recent activity</h2><button class="btn btn-sm" type="button" data-section="myrequests">View all</button></div>
-        ${records.length ? `<div class="grid">${records.slice(0, 3).map(renderRecordSummary).join("")}</div>`
-          : renderEmptyState("Nothing submitted yet", "Requests, bookings and appointments you submit will appear here with their status.", "inbox")}
-      </section>
-    </div>`;
-}
-
-function renderRecordSummary(r) {
-  return `
-    <button class="record-card" style="text-align:left;color:var(--text)" type="button" data-section="myrequests">
-      <div class="row">${icon(RECORD_TYPES[r._type].icon)}<strong>${escapeHTML(recordTitle(r))}</strong></div>
-      <p class="muted" style="margin:6px 0">${RECORD_TYPES[r._type].label} · ${formatDate(r.created_at)}</p>
-      ${statusPill(r.status)}
-    </button>`;
+    </section>`;
+  window.CampusToday?.renderTodayCard();
+  window.Carehub?.updateHeroButton();
 }
 
 // =========================================================
@@ -690,7 +807,7 @@ function renderFinderPage() {
         <h3 style="margin-top:10px">We couldn't find "${escapeHTML(term)}".</h3>
         <p class="muted">Try a different keyword, browse by category, or ask an office directly.</p>
         <div class="chips" style="justify-content:center">
-          ${suggestions.map((s) => `<button class="chip" type="button" data-action="open-service" data-id="${s.id}">${icon(s.icon_name)} ${escapeHTML(s.name)}</button>`).join("")}
+          ${suggestions.map((s) => `<button class="chip" type="button" data-action="open-service" data-id="${s.id}">${icon(serviceIcon(s))} ${escapeHTML(s.name)}</button>`).join("")}
         </div>
         <div class="row" style="justify-content:center;margin-top:14px">
           <button class="btn" type="button" data-action="clear-search">${icon("x")} Clear search</button>
@@ -868,7 +985,7 @@ async function renderMyRequestsPage() {
   const tabs = [["all", "All"], ...Object.entries(RECORD_TYPES).map(([k, v]) => [k, v.label === "Equipment" ? "Equipment" : v.label + "s"])];
   const shown = state.pulseTab === "all" ? all : all.filter((r) => r._type === state.pulseTab);
   document.getElementById("mainContent").innerHTML = `
-    ${renderPageHeader("My Requests", "Every request, booking and appointment you've submitted, with its current status and what happens next.", `${icon("clipboard-list")} Status & next steps`)}
+    ${renderPageHeader("My Requests", "Every request, booking and appointment you've submitted, with its current status and what happens next.", `${icon("list-checks")} Status & next steps`)}
     <div class="tabs" role="tablist">${tabs.map(([k, label]) => `<button class="tab" role="tab" type="button" data-action="pulse-tab" data-tab="${k}" aria-selected="${state.pulseTab === k}">${label} (${k === "all" ? all.length : all.filter((r) => r._type === k).length})</button>`).join("")}</div>
     ${shown.length ? `<div class="grid" data-tour="requests-list">${shown.map(renderRecordCard).join("")}</div>`
       : renderEmptyState("Nothing here yet", "Open any service and use its button to submit a request, book a room or set an appointment.", "inbox", `<button class="btn btn-primary" type="button" data-section="finder">${icon("search")} Find a service</button>`)}`;
@@ -948,7 +1065,7 @@ function renderSettingsPage() {
 // ---------- Admin panel: statuses, announcements, services and offices ----------
 async function renderStaffPage() {
   if (!isStaff()) return navigateTo("home");
-  const tabs = [["records", "Requests & bookings"], ["announcements", "Announcements"], ["services", "Services"], ["offices", "Offices"]];
+  const tabs = [["records", "Requests & bookings"], ["announcements", "Announcements"], ["services", "Services"], ["offices", "Offices"], ["campus", "Canteen & Shuttle"], ["carehub", "Carehub"]];
   if (!tabs.some(([k]) => k === state.staffTab)) state.staffTab = "records";
   let body = "", actions = "";
   const verifiedBadge = (v) => v ? '<span class="badge badge-ok">Verified</span>' : '<span class="badge badge-sample">Sample</span>';
@@ -1001,6 +1118,10 @@ async function renderStaffPage() {
           <button class="btn btn-sm btn-danger" type="button" data-action="delete-service" data-id="${escapeHTML(s.id)}">${icon("trash-2")} Delete</button></div></td></tr>`).join("")}
       </tbody></table></div>` : renderEmptyState("No services in this building", "Press Add service to create the first one.", "building")}`;
 
+  } else if (state.staffTab === "carehub") {
+    body = await window.Carehub.renderAdminTab();
+  } else if (state.staffTab === "campus") {
+    body = await window.CampusToday.renderAdminTab();
   } else {
     body = `<div class="table-wrap"><table><thead><tr><th>Office</th><th>Location</th><th>Hours</th><th>Email</th><th>Status</th><th></th></tr></thead><tbody>
       ${state.data.offices.map((o) => `<tr><td><strong>${escapeHTML(o.name)}</strong><br><small class="muted">${buildingName(o.building_key)}</small></td><td>${escapeHTML([o.floor_label, o.room_number].filter(Boolean).join(" · ") || "—")}</td>
@@ -1028,9 +1149,9 @@ function serviceBadges(s) {
 }
 function renderServiceCard(s) {
   return `
-    <button class="service-card ${neonClass(s.name)}" type="button" data-action="open-service" data-id="${s.id}">
+    <button class="service-card ${catClass(s.category)}" type="button" data-action="open-service" data-id="${s.id}">
       <div class="service-card-top">
-        <span class="service-icon">${icon(s.icon_name)}</span>
+        <span class="service-icon">${icon(serviceIcon(s))}</span>
         <div><h3>${escapeHTML(s.name)}</h3><p>${escapeHTML(s.description || "")}</p></div>
       </div>
       <div class="service-meta">
@@ -1050,6 +1171,8 @@ const ACTION_BUTTONS = {
 function openServiceDialog(id) {
   const s = state.data.services.find((x) => x.id === id);
   if (!s) return;
+  // Carehub opens the daily CIITzen Care Hub check-in form (carehub.js) instead of a service page.
+  if (s.service_code === "carehub" && window.Carehub) return window.Carehub.open();
   const office = officeByKey(s.office_key);
   const twin = serviceByCode(s.service_code, otherBuilding(s.building_key));
   const url = safeUrl(s.website_url);
@@ -1266,11 +1389,14 @@ function openProfileDialog() {
 function openShortcutEditor() {
   const list = servicesIn().sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
   showDialog("Customize Quick access", `
-    <p class="muted">Pinned services always appear first. Hidden ones never appear. Others are suggested from your program and year.</p>
-    <div class="table-wrap" style="max-height:420px;overflow:auto"><table><thead><tr><th>Service</th><th>Pin</th><th>Hide</th></tr></thead><tbody>
-      ${list.map((s) => { const p = state.shortcutPrefs[s.service_code] || {}; return `<tr><td>${escapeHTML(s.name)}<br><small class="muted">${escapeHTML(s.category)}</small></td>
-        <td><input type="checkbox" aria-label="Pin ${escapeHTML(s.name)}" data-pref="pin" data-code="${escapeHTML(s.service_code)}" ${p.is_pinned ? "checked" : ""}></td>
-        <td><input type="checkbox" aria-label="Hide ${escapeHTML(s.name)}" data-pref="hide" data-code="${escapeHTML(s.service_code)}" ${p.is_hidden ? "checked" : ""}></td></tr>`; }).join("")}
+    <p class="muted"><strong>Always show</strong> pins a service to the top. <strong>Never show</strong> hides it. <strong>Auto</strong> lets Quick access suggest it based on your program and year.</p>
+    <div class="table-wrap qp-edit" style="max-height:420px;overflow:auto"><table><thead><tr><th>Service</th><th>In Quick access</th></tr></thead><tbody>
+      ${list.map((s) => { const p = state.shortcutPrefs[s.service_code] || {}; const mode = p.is_pinned ? "pin" : p.is_hidden ? "hide" : "auto"; return `<tr><td><div class="row ${catClass(s.category)}" style="flex-wrap:nowrap"><span class="service-icon service-icon-sm">${icon(serviceIcon(s))}</span><span>${escapeHTML(s.name)}<br><small class="muted">${escapeHTML(s.category)}</small></span></div></td>
+        <td><select class="qp-mode qp-mode-${mode}" aria-label="Quick access setting for ${escapeHTML(s.name)}" data-pref="mode" data-code="${escapeHTML(s.service_code)}">
+          <option value="auto" ${mode === "auto" ? "selected" : ""}>Auto</option>
+          <option value="pin" ${mode === "pin" ? "selected" : ""}>Always show</option>
+          <option value="hide" ${mode === "hide" ? "selected" : ""}>Never show</option>
+        </select></td></tr>`; }).join("")}
     </tbody></table></div>
     <div class="dialog-actions"><button class="btn btn-primary" type="button" data-action="close-and-refresh">Done</button></div>`, { wide: true });
 }
@@ -1341,7 +1467,7 @@ function openProfileMenu(anchor) {
   menu.innerHTML = `
     <p style="padding:6px 10px;margin:0"><strong>${escapeHTML(state.profile?.full_name || "")}</strong><br><small class="muted">${escapeHTML(state.user.email)}</small></p>
     <button class="btn btn-ghost" role="menuitem" type="button" data-section="settings">${icon("settings")} Settings</button>
-    <button class="btn btn-ghost" role="menuitem" type="button" data-section="myrequests">${icon("activity")} My requests</button>
+    <button class="btn btn-ghost" role="menuitem" type="button" data-section="myrequests">${icon("list-checks")} My requests</button>
     <button class="btn btn-ghost phone-only" role="menuitem" type="button" data-action="start-tour" data-tour-section="">${icon("circle-help")} Tutorial</button>
     <button class="btn btn-ghost" role="menuitem" type="button" data-action="sign-out">${icon("log-out")} Sign out</button>`;
   document.body.appendChild(menu);
@@ -1442,14 +1568,14 @@ const MANUAL = [
   { icon: "rocket", title: "Getting started", tour: "shell", section: "home", steps: [
     "Sign in with your CIIT email (name@ciit.edu.ph) and password.",
     "Use the building switch at the top right to choose Interweave or Glitch Tower. Every page changes to match.",
-    "Use the sidebar on the left to move between pages. On tablets it shows icons only. On phones, tap the menu button at the top left to open it.",
+    "Use the sidebar on the left to move between pages. My Requests is right under Home. Press Services to show or hide the service categories. On tablets it shows icons only. On phones, tap the menu button at the top left to open it.",
     "Use the search box at the top to find any service, room or office in both buildings.",
     "Press Tutorial at the top any time to replay the guided tour."] },
   { icon: "house", title: "Home", tour: "home", section: "home", steps: [
     "The banner greets you and links to Carehub check-in and your open requests.",
     "Announcements show news for your building. Press Hide to dismiss one, or Show hidden to bring them back.",
-    "Quick access lists the services you use most. Press Customize to pin or hide services.",
-    "Frequently searched and My recent activity give you shortcuts to popular services and your latest submissions."] },
+    "Quick access is the panel on the right side of every page. It lists Carehub, your pinned services, suggestions for your program and year, and the services students use most. Press Customize to pin or hide services. On tablets, open it with the Quick access button in the top bar; on phones it appears on Home.",
+    "Each service has its own icon, and each category has its own colour, so you can spot them at a glance."] },
   { icon: "search", title: "Find a Service", tour: "finder", section: "finder", steps: [
     "Type a keyword such as transcript, clinic or Mac lab. Results update as you type.",
     "Use the category chips to narrow the list.",
@@ -1462,6 +1588,16 @@ const MANUAL = [
   { icon: "map", title: "Moving Around", tour: "moving", section: "moving", steps: [
     "Pick a floor from the list to see its rooms and the services located there.",
     "Off-limits floors are clearly marked. Follow campus safety instructions."] },
+  { icon: "heart-pulse", title: "Carehub check-in", tour: "home", section: "home", steps: [
+    "Every day you open GlitchWayve, the CIITzen Care Hub form appears once. You can also open it from Carehub check-in on Home or Carehub in Quick access.",
+    "Answer both questions: whether you have any health issue today, and how you're feeling. Then press Submit.",
+    "If you don't feel well, you'll see where the Clinic is. If you're going through something, you'll see Guidance & Counseling, and if you need help now, the 24/7 crisis hotline numbers.",
+    "Press Change my answers if something changes during the day."] },
+  { icon: "clock", title: "Canteen & Shuttle", tour: "campus", section: "campus", steps: [
+    "Open Canteen & Shuttle in the menu, or press the Today card on Home.",
+    "Food menu: today's meals and snacks, with photos and prices, for the building you're viewing. Interweave and Glitch Tower have different canteens and menus. Press Tomorrow to see the next day's menu if it's posted.",
+    "Shuttle schedule: every trip from your building and back, the next trip, and notices such as holidays with no service.",
+    "Canteen staff: press Edit menu, use Copy previous day to start quickly, change the dishes and prices, then press Publish menu. Use Mark sold out during the day."] },
   { icon: "contact", title: "Help & Contact", tour: "directory", section: "directory", steps: [
     "Find the office that handles your concern, with its location, hours and email.",
     "Copy an email address with one click."] },
@@ -1470,7 +1606,7 @@ const MANUAL = [
     "Choose a type, urgency, building and location, describe the concern, then press Submit to PULSE.",
     "Your concern appears on the right with a progress tracker.",
     "Press Move to next stage (demo) to see how a real concern would travel from Received to Resolved."] },
-  { icon: "clipboard-list", title: "My Requests", tour: "myrequests", section: "myrequests", steps: [
+  { icon: "list-checks", title: "My Requests", tour: "myrequests", section: "myrequests", steps: [
     "This is your real tracker for requests, appointments, room bookings, equipment and projects.",
     "Use the tabs to filter by type. The number shows how many you have.",
     "Each card shows its status, a progress bar and what happens next.",
@@ -1525,7 +1661,7 @@ function renderManualPage() {
 // "shell" steps belong to the always-visible sidebar/top bar. Other steps name their page.
 const TOUR_STEPS = [
   { section: "shell", target: "#sidebar .brand", title: "Welcome to GlitchWayve", text: "This is your CIIT student dashboard. Services, rooms, offices and your requests for Interweave and Glitch Tower are all here." },
-  { section: "shell", target: "#sidebar", title: "Main menu", text: "Jump between pages here. Services are grouped by category. On tablets only icons show. On phones, tap the menu button at the top left to open it." },
+  { section: "shell", target: "#sidebar", title: "Main menu", text: "Jump between pages here. My Requests is right under Home. Press Services to open or close the service categories. On tablets only icons show. On phones, tap the menu button at the top left to open it." },
   { section: "shell", target: ".building-switch", title: "Switch buildings", text: "Interweave and Glitch Tower have different services, rooms and hours. Switching changes the colours and what every page shows." },
   { section: "shell", target: ".topbar-search", title: "Search everything", text: "Type a service, room or office name and press Enter. It searches both buildings and shows the current one first." },
   { section: "shell", target: ".tour-button", title: "Tutorial button", text: "Replay this tour whenever you like. The User Manual in the menu has the same steps in writing." },
@@ -1535,9 +1671,8 @@ const TOUR_STEPS = [
 
   { section: "home", target: ".hero", title: "Home banner", text: "Your greeting, a Carehub check-in shortcut, and a button to My Requests that shows how many are still open." },
   { section: "home", target: ".announcements-top", title: "Announcements", text: "News for your building. Press Hide to dismiss one and Show hidden to bring dismissed ones back. Admins also get a Manage button here." },
-  { section: "home", target: '[data-tour="quick"]', title: "Quick access", text: "Your most useful services as tiles. Press Customize to pin the ones you want first or hide the ones you don't." },
-  { section: "home", target: '[data-tour="popular"]', title: "Frequently searched", text: "Popular services in this building, with their location and hours. Press one to see details." },
-  { section: "home", target: '[data-tour="recent"]', title: "My recent activity", text: "Your latest requests, bookings and appointments with their status. View all opens My Requests." },
+  { section: "home", target: '[data-tour="today"]', title: "Today at your campus", text: "The canteen's current meal and the next shuttle from the building you're viewing. Press either one for the full menu or schedule." },
+  { section: "home", target: '[data-tour="quick"]', title: "Quick access", text: "Your most useful services, always on the right side of the screen (on tablets, open it with the Quick access button at the top; on phones it's on Home). Press Customize to pin or hide services. Your requests and their status are in My Requests in the menu." },
 
   { section: "finder", target: 'form[data-form="finder-search"]', title: "Search box", text: "Type a keyword such as transcript, clinic or Mac lab. Results update as you type." },
   { section: "finder", target: "#mainContent .chips", title: "Category filters", text: "Narrow the results to one category, or choose All to see everything." },
@@ -1549,6 +1684,9 @@ const TOUR_STEPS = [
   { section: "moving", target: ".floor-list", title: "Floors", text: "Pick a floor to see what's on it. Floors that are off limits to students are marked." },
   { section: "moving", target: ".floor-layout > div:nth-child(2)", title: "Rooms and services", text: "The rooms on the chosen floor, plus the services located there." },
 
+  { section: "campus", before: () => { state.campusTab = "canteen"; }, target: '[data-tour="campus-tabs"]', title: "Canteen & Shuttle", text: "Switch between the food menu and the shuttle schedule. Both follow the building switch: each campus has its own canteen." },
+  { section: "campus", before: () => { state.campusTab = "canteen"; }, target: '[data-tour="canteen-card"]', title: "Today's menu", text: "Meals and snacks for today, with photos and prices, posted by the canteen every morning. Sold-out dishes are crossed out. Use Tomorrow to plan ahead." },
+  { section: "campus", before: () => { state.campusTab = "shuttle"; }, target: '[data-tour="shuttle-times"]', title: "Shuttle schedule", text: "Every trip from this building and back. Yellow trips are peak hours, the outlined one is the next trip, and crossed-out ones have already left." },
   { section: "directory", target: "#mainContent .page-header + *", title: "Offices and contacts", text: "Find who handles your concern, where they are, when they're open and how to email them." },
 
   { section: "pulse", target: "#pulseForm", title: "PULSE concern form", text: "PULSE is a simulation. Choose a type, urgency and location, describe the concern, then submit. Nothing is sent to CIIT." },
@@ -1622,12 +1760,16 @@ function tourGo(delta) {
   showTourStep(next);
 }
 /** Waits until the wanted page has finished rendering and the target exists (or gives up). */
+/** First element matching the selector that is actually on screen (skips hidden copies). */
+function visibleQuery(selector) {
+  return [...document.querySelectorAll(selector)].find((el) => el.getClientRects().length > 0) || null;
+}
 function waitForTourTarget(selector, wantedSection, ms = 3500) {
   return new Promise((resolve) => {
     const t0 = Date.now();
     const tick = () => {
       const pageReady = (!wantedSection || state.section === wantedSection) && !document.querySelector("#mainContent .skeleton");
-      const el = pageReady ? document.querySelector(selector) : null;
+      const el = pageReady ? visibleQuery(selector) : null;
       if (el) return resolve(el);
       if (Date.now() - t0 > ms) return resolve(null);
       setTimeout(tick, 100);
@@ -1649,6 +1791,7 @@ async function showTourStep(i) {
 
   const wanted = step.section === "shell" ? null : step.section;
   setNavOpen(step.target.startsWith("#sidebar"));
+  setQuickPanelOpen(step.target.includes("quick"));
   if (step.before) step.before();
   if (wanted && state.section !== wanted) navigateTo(wanted);
   else if (step.before) renderCurrentPage();
@@ -1670,7 +1813,7 @@ function positionTour() {
   const W = document.documentElement.clientWidth;
   const H = document.documentElement.clientHeight;
   const gap = 14, pad = 8, margin = 12;
-  const el = document.querySelector(step.target);
+  const el = visibleQuery(step.target);
   const r = el ? el.getBoundingClientRect() : null;
   const cardW = card.offsetWidth, cardH = card.offsetHeight;
 
@@ -1797,7 +1940,7 @@ function openServiceEditor(id = null) {
       </div>
       <div class="field"><label for="esNext">Next step for students</label><textarea id="esNext" name="next_steps">${escapeHTML(s?.next_steps || "")}</textarea></div>
       <div class="field"><label for="esIcon">Icon name</label><input id="esIcon" name="icon_name" type="text" value="${escapeHTML(s?.icon_name || "circle-dot")}"><small>Any icon name from lucide.dev, e.g. library, printer, heart-pulse.</small></div>
-      <label class="checkbox-row"><input type="checkbox" name="is_popular" ${s?.is_popular ? "checked" : ""}> Show under Frequently searched</label>
+      <label class="checkbox-row"><input type="checkbox" name="is_popular" ${s?.is_popular ? "checked" : ""}> Suggest in Quick access (popular service)</label>
       <label class="checkbox-row"><input type="checkbox" name="details_verified" ${s?.details_verified ? "checked" : ""}> Verified with the office</label>
       <p class="form-error" id="formError" role="alert"></p>
       <div class="dialog-actions"><button class="btn" type="button" data-action="close-dialog">Cancel</button>
@@ -1849,6 +1992,14 @@ async function handleClick(event) {
 
   const { action, id } = target.dataset;
   switch (action) {
+    case "toggle-services":
+      state.servicesOpen = target.getAttribute("aria-expanded") !== "true";
+      localStorage.setItem("gw-services-open", state.servicesOpen);
+      target.setAttribute("aria-expanded", String(state.servicesOpen));
+      document.getElementById("navServices").hidden = !state.servicesOpen;
+      return;
+    case "toggle-quick-panel": return setQuickPanelOpen(!state.quickPanelOpen);
+    case "close-quick-panel": return setQuickPanelOpen(false);
     case "toggle-nav": return setNavOpen(!document.body.classList.contains("nav-open"), { focus: true });
     case "close-nav": return setNavOpen(false, { focus: true });
     case "close-dialog": return closeDialog();
@@ -1872,6 +2023,7 @@ async function handleClick(event) {
       const code = target.dataset.code;
       await saveShortcutPref(code, { is_pinned: !state.shortcutPrefs[code]?.is_pinned });
       closeDialog(); showToast(state.shortcutPrefs[code]?.is_pinned ? "Pinned to Quick access." : "Removed from Quick access.");
+      renderQuickPanel();
       if (state.section === "home") renderCurrentPage();
       return;
     }
@@ -1972,10 +2124,11 @@ async function handleChange(event) {
   if (el.dataset.setting === "text-size") { state.textSize = el.value; localStorage.setItem("gw-text-size", el.value); applyAccessibilitySettings(); }
   if (el.dataset.setting === "high-contrast") { state.highContrast = el.checked; localStorage.setItem("gw-high-contrast", el.checked); applyAccessibilitySettings(); }
   if (el.dataset.pref) {
-    await saveShortcutPref(el.dataset.code, el.dataset.pref === "pin" ? { is_pinned: el.checked } : { is_hidden: el.checked });
-    const row = el.closest("tr");
-    row.querySelector('[data-pref="pin"]').checked = !!state.shortcutPrefs[el.dataset.code]?.is_pinned;
-    row.querySelector('[data-pref="hide"]').checked = !!state.shortcutPrefs[el.dataset.code]?.is_hidden;
+    await saveShortcutPref(el.dataset.code, { is_pinned: el.value === "pin", is_hidden: el.value === "hide" });
+    const saved = state.shortcutPrefs[el.dataset.code] || {};
+    el.value = saved.is_pinned ? "pin" : saved.is_hidden ? "hide" : "auto";
+    el.className = `qp-mode qp-mode-${el.value}`;
+    renderQuickPanel();
   }
 }
 
@@ -2009,6 +2162,7 @@ function handleKeydown(event) {
   }
   if (event.key === "Escape") {
     if (document.body.classList.contains("nav-open")) return setNavOpen(false, { focus: true });
+    if (state.quickPanelOpen) { setQuickPanelOpen(false); return document.querySelector(".qp-toggle")?.focus(); }
     document.getElementById("profileMenu")?.remove(); closeDialog();
   }
   // Arrow keys move between the two building buttons
