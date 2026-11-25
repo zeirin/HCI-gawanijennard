@@ -1162,3 +1162,10 @@ html[data-building="glitch"] .sh-bus { border-color: var(--neon-yellow); color: 
 .rz-note h2, .rz-note p { color: var(--ok-text); }
 .rz-note-icon { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--surface); color: var(--ok-text); }
 @media (max-width: 600px) { .rz-note { flex-direction: column; } }
+.prof-dept-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+.prof-class-row { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px 0; margin: 0 0 12px; }
+.prof-class-row legend { font-weight: 700; padding: 0 4px; }
+@media (max-width: 600px) { .prof-dept-checks { grid-template-columns: 1fr; } }
+.prof-row-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.prof-remove { color: var(--err-text); font-weight: 500; opacity: .85; }
+.prof-remove:hover { opacity: 1; background: var(--err-bg, transparent); }

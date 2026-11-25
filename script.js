@@ -636,7 +636,7 @@ async function renderCurrentPage() {
     else if (state.section === "finder") renderFinderPage();
     else if (category) renderCategoryPage(category);
     else if (state.section === "moving") await renderMovingPage();
-    else if (state.section === "directory") renderDirectoryPage();
+    else if (state.section === "directory") await renderDirectoryPage();
     else if (state.section === "pulse") renderPulsePage();
     else if (state.section === "myrequests") await renderMyRequestsPage();
     else if (state.section === "manual") renderManualPage();
@@ -895,7 +895,7 @@ function renderRoomCard(r) {
     </article>`;
 }
 
-function renderDirectoryPage() {
+async function renderDirectoryPage() {
   const tab = state.directoryTab || "offices";
   const offices = [...state.data.offices].sort((a, b) => (a.building_key === state.building ? -1 : 1) - (b.building_key === state.building ? -1 : 1) || a.name.localeCompare(b.name));
   document.getElementById("mainContent").innerHTML = `
@@ -903,7 +903,7 @@ function renderDirectoryPage() {
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" type="button" data-action="directory-tab" data-tab="offices" aria-selected="${tab === "offices"}">${icon("building-2")} Offices</button>
       <button class="tab" role="tab" type="button" data-action="directory-tab" data-tab="professors" aria-selected="${tab === "professors"}">${icon("graduation-cap")} Professors</button></div>
-    ${tab === "professors" ? renderProfessorsTab() : `<div class="grid grid-2">${offices.map(renderOfficeCard).join("")}</div>`}`;
+    ${tab === "professors" ? await window.Professors.renderProfessorsTab() : `<div class="grid grid-2">${offices.map(renderOfficeCard).join("")}</div>`}`;
 }
 
 function renderOfficeCard(o, compact = false) {
@@ -1075,7 +1075,7 @@ function renderSettingsPage() {
 // ---------- Admin panel: statuses, announcements, services and offices ----------
 async function renderStaffPage() {
   if (!isStaff()) return navigateTo("home");
-  const tabs = [["records", "Requests & bookings"], ["announcements", "Announcements"], ["services", "Services"], ["offices", "Offices"], ["campus", "Canteen & Shuttle"], ["carehub", "Carehub"]];
+  const tabs = [["records", "Requests & bookings"], ["announcements", "Announcements"], ["services", "Services"], ["offices", "Offices"], ["professors", "Professors"], ["campus", "Canteen & Shuttle"], ["carehub", "Carehub"]];
   if (!tabs.some(([k]) => k === state.staffTab)) state.staffTab = "records";
   let body = "", actions = "";
   const verifiedBadge = (v) => v ? '<span class="badge badge-ok">Verified</span>' : '<span class="badge badge-sample">Sample</span>';
@@ -1130,6 +1130,8 @@ async function renderStaffPage() {
 
   } else if (state.staffTab === "carehub") {
     body = await window.Carehub.renderAdminTab();
+  } else if (state.staffTab === "professors") {
+    body = await window.Professors.renderAdminTab();
   } else if (state.staffTab === "campus") {
     body = await window.CampusToday.renderAdminTab();
   } else {
@@ -1752,7 +1754,7 @@ const TOUR_STEPS = [
   { section: "settings", target: "#textSize", title: "Display options", text: "Make the text larger or turn on high contrast. The choice is remembered on this device." },
   { section: "settings", target: '[data-action="sign-out"]', title: "Sign out", text: "Sign out when you're done, especially on a shared computer." },
 
-  { section: "staff", staffOnly: true, before: () => { state.staffTab = "records"; }, target: "#mainContent .tabs", title: "Admin tabs", text: "Switch between student records, announcements, services and offices." },
+  { section: "staff", staffOnly: true, before: () => { state.staffTab = "records"; }, target: "#mainContent .tabs", title: "Admin tabs", text: "Switch between student records, announcements, services, offices and professors." },
   { section: "staff", staffOnly: true, before: () => { state.staffTab = "records"; }, target: "#adminBody", title: "Requests and bookings", text: "Pick a new status, add an optional note, then press Update. The student is notified automatically." },
   { section: "staff", staffOnly: true, before: () => { state.staffTab = "announcements"; }, target: '[data-tour="admin-actions"]', title: "Add announcements", text: "Press New announcement, write the message and choose which building sees it. You can edit or delete any announcement in the list below." },
   { section: "staff", staffOnly: true, before: () => { state.staffTab = "services"; }, target: '[data-tour="admin-actions"]', title: "Add services", text: "Press Add service to create one in the building you're viewing. Use Edit to change details or Delete to remove it from student view." },
