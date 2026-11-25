@@ -90,6 +90,7 @@ const NAV_GROUPS = [
   // "collapsible": shown as one "Services" button that opens and closes, so the menu fits without scrolling.
   { label: "Services", collapsible: true, icon: "layers", items: [
     { section: "foundit", label: "FoundIt", icon: "package-search" },
+    { section: "rezbin", label: "Rezbin", icon: "recycle" },
     ...CATEGORIES.map((c) => ({ section: c.section, label: c.category, icon: c.icon }))
   ] },
   { label: "My activity", items: [
@@ -644,6 +645,7 @@ async function renderCurrentPage() {
     else if (state.section === "settings") renderSettingsPage();
     else if (state.section === "staff") await renderStaffPage();
     else if (state.section === "foundit") await window.FoundIt.render();
+    else if (state.section === "rezbin") renderRezbinPage();
     else if (state.section === "campus") await window.CampusToday.renderCampusPage();
   } catch (error) {
     showPageError(error);
@@ -1643,6 +1645,40 @@ const MANUAL = [
     "Services: press Add service to create one, Edit to change details, or Delete to remove it from student view.",
     "Offices: keep hours, rooms and emails current and tick Verified once confirmed with the office."] }
 ];
+// ---------- Rezbin (recycling partner app) ----------
+// TODO: replace with Rezbin's real app link (Play Store / App Store / website).
+const REZBIN_APP_URL = "https://play.google.com/store/search?q=rezbin&c=apps";
+
+function renderRezbinPage() {
+  const placeholder = (title, ic) => `
+    <article class="card">
+      <div class="row"><span class="service-icon">${icon(ic)}</span><h3 style="margin:0">${title}</h3></div>
+      <p class="muted" style="margin:10px 0 0">Information about this will be added soon.</p>
+      <div class="badges" style="margin-top:10px"><span class="badge badge-sample">Placeholder</span></div>
+    </article>`;
+  document.getElementById("mainContent").innerHTML = `
+    ${renderPageHeader("Rezbin", "Recycle right on campus with the Rezbin app.", `${icon("recycle")} Recycling`)}
+    <section class="card rz-note" aria-label="A note on recycling">
+      <span class="rz-note-icon">${icon("leaf")}</span>
+      <div>
+        <h2 style="margin:0 0 6px">Keep CIIT clean — sort before you toss</h2>
+        <p style="margin:0">Every bottle, can and paper you put in the right bin keeps it out of landfills and our waterways.
+          Please separate your waste into <strong>recyclables</strong>, <strong>biodegradables</strong> and <strong>residual</strong> waste,
+          rinse containers when you can, and never leave trash behind. Small habits add up when the whole campus does them.
+          Download the Rezbin app to find bins and start recycling today.</p>
+        <div class="row" style="margin-top:14px;flex-wrap:wrap;gap:8px">
+          <a class="btn btn-primary" href="${REZBIN_APP_URL}" target="_blank" rel="noopener">${icon("download")} Download the Rezbin app</a>
+        </div>
+      </div>
+    </section>
+    <div class="grid grid-2" style="margin-top:16px">
+      ${placeholder("About Rezbin", "info")}
+      ${placeholder("How it works", "list-ordered")}
+      ${placeholder("Where to find Rezbin bins", "map-pin")}
+      ${placeholder("Rewards and points", "gift")}
+    </div>`;
+}
+
 function renderManualPage() {
   const items = MANUAL.filter((m) => !m.staffOnly || isStaff());
   document.getElementById("mainContent").innerHTML = `

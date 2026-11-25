@@ -1156,3 +1156,9 @@ html[data-building="glitch"] .sh-bus { border-color: var(--neon-yellow); color: 
 .prof-sched li span { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .prof-sched svg.lucide, .prof-filters svg.lucide { width: 14px; height: 14px; }
 .prof-filters .chip[aria-pressed="true"] .muted { color: inherit; opacity: .85; }
+
+/* ---------- Rezbin ---------- */
+.rz-note { display: flex; gap: 16px; align-items: flex-start; background: var(--ok-bg); border-color: transparent; }
+.rz-note h2, .rz-note p { color: var(--ok-text); }
+.rz-note-icon { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--surface); color: var(--ok-text); }
+@media (max-width: 600px) { .rz-note { flex-direction: column; } }
