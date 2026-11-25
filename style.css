@@ -1147,3 +1147,12 @@ html[data-building="glitch"] .sh-bus { border-color: var(--neon-yellow); color: 
 .qp-mode { width: 100%; min-width: 150px; min-height: 36px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background-color: var(--surface); color: var(--text); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
 .qp-mode-pin { border-color: var(--accent); background-color: var(--accent-soft); color: var(--accent); }
 .qp-mode-hide { color: var(--muted); background-color: var(--surface-2); }
+
+/* ---------- Help & Contact → Professors ---------- */
+.prof-avatar { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--accent-soft); color: var(--text); font-weight: 800; letter-spacing: .03em; }
+.prof-card .badges { margin-top: 4px; }
+.prof-sched { list-style: none; margin: 12px 0 8px; padding: 0; display: grid; gap: 8px; }
+.prof-sched li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); font-size: .86rem; }
+.prof-sched li span { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.prof-sched svg.lucide, .prof-filters svg.lucide { width: 14px; height: 14px; }
+.prof-filters .chip[aria-pressed="true"] .muted { color: inherit; opacity: .85; }

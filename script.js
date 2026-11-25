@@ -125,6 +125,8 @@ const TIME_SLOTS = ["8:00 – 9:00 AM", "9:00 – 10:00 AM", "10:00 – 11:00 AM
 // =========================================================
 const state = {
   campusTab: "canteen",
+  directoryTab: "offices",
+  profFilter: "all",
   menuDate: null,
   openCount: 0,
   servicesOpen: localStorage.getItem("gw-services-open") === "true",
@@ -164,6 +166,8 @@ function formatDate(value, withTime = false) {
     : { month: "short", day: "numeric", year: "numeric" });
 }
 function todayString() { return new Date().toISOString().slice(0, 10); }
+/** Opens a new Gmail compose window addressed to this email. */
+function gmailHref(email) { return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}`; }
 function buildingName(key = state.building) { return BUILDINGS[key]?.name || "Campus"; }
 function otherBuilding(key = state.building) { return key === "interweave" ? "glitch" : "interweave"; }
 function isStaff() { return state.profile?.role === "staff"; }
@@ -890,10 +894,14 @@ function renderRoomCard(r) {
 }
 
 function renderDirectoryPage() {
+  const tab = state.directoryTab || "offices";
   const offices = [...state.data.offices].sort((a, b) => (a.building_key === state.building ? -1 : 1) - (b.building_key === state.building ? -1 : 1) || a.name.localeCompare(b.name));
   document.getElementById("mainContent").innerHTML = `
     ${renderPageHeader("Help & Contact", "Who to ask when you can't find something — with hours, location and what to bring. Offices in other buildings are listed too.", `${icon("contact")} Office directory`)}
-    <div class="grid grid-2">${offices.map(renderOfficeCard).join("")}</div>`;
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" type="button" data-action="directory-tab" data-tab="offices" aria-selected="${tab === "offices"}">${icon("building-2")} Offices</button>
+      <button class="tab" role="tab" type="button" data-action="directory-tab" data-tab="professors" aria-selected="${tab === "professors"}">${icon("graduation-cap")} Professors</button></div>
+    ${tab === "professors" ? renderProfessorsTab() : `<div class="grid grid-2">${offices.map(renderOfficeCard).join("")}</div>`}`;
 }
 
 function renderOfficeCard(o, compact = false) {
@@ -907,7 +915,7 @@ function renderOfficeCard(o, compact = false) {
         <span>${icon("map-pin")} ${escapeHTML([buildingName(o.building_key), o.floor_label, o.room_number].filter(Boolean).join(" · ") || "Location not yet added")}</span>
         <span>${icon("clock")} ${escapeHTML(o.hours || "Hours not yet added")}</span>
         ${o.what_to_bring ? `<span>${icon("backpack")} Bring: ${escapeHTML(o.what_to_bring)}</span>` : ""}
-        ${o.email ? `<span>${icon("mail")} <a href="mailto:${escapeHTML(o.email)}">${escapeHTML(o.email)}</a>
+        ${o.email ? `<span>${icon("mail")} <a href="${gmailHref(o.email)}" target="_blank" rel="noopener">${escapeHTML(o.email)}</a>
           <button class="btn btn-sm btn-ghost" type="button" data-action="copy-email" data-email="${escapeHTML(o.email)}" aria-label="Copy ${escapeHTML(o.email)}">${icon("copy")}</button></span>` : ""}
       </div>
       <div class="badges" style="margin-top:10px">${o.details_verified ? '<span class="badge badge-ok">Verified</span>' : '<span class="badge badge-sample">Sample details</span>'}
@@ -1600,7 +1608,8 @@ const MANUAL = [
     "Canteen staff: press Edit menu, use Copy previous day to start quickly, change the dishes and prices, then press Publish menu. Use Mark sold out during the day."] },
   { icon: "contact", title: "Help & Contact", tour: "directory", section: "directory", steps: [
     "Find the office that handles your concern, with its location, hours and email.",
-    "Copy an email address with one click."] },
+    "Press an email address to write to the office in Gmail, or copy it with one click.",
+    "Open the Professors tab to see each professor's classes, rooms and consultation hours. Use the department buttons to filter."] },
   { icon: "activity", title: "PULSE (simulation)", tour: "pulse", section: "pulse", steps: [
     "PULSE is a practice tool for reporting campus concerns. Nothing is sent to CIIT.",
     "Choose a type, urgency, building and location, describe the concern, then press Submit to PULSE.",
@@ -2038,6 +2047,8 @@ async function handleClick(event) {
     case "select-floor": state.floorId = id; return renderCurrentPage();
     case "pulse-tab": state.pulseTab = target.dataset.tab; return renderCurrentPage();
     case "staff-tab": state.staffTab = target.dataset.tab; return renderCurrentPage();
+    case "directory-tab": state.directoryTab = target.dataset.tab; return renderCurrentPage();
+    case "prof-filter": state.profFilter = target.dataset.filter; return renderCurrentPage();
     case "edit-service": return openServiceEditor(id);
     case "new-service": return openServiceEditor();
     case "delete-service": if (!adminOnly() || !confirmInline(target, "Tap again to delete")) return; return deleteService(id);
